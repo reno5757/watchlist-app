@@ -1,0 +1,16 @@
+# Node
+node_modules
+.next
+.env*
+!.env.local.example
+
+# Python
+etl/.venv
+__pycache__/
+*.pyc
+
+# Data
+data/*.db*
+
+# Logs
+etl/logs/
