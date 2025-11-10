@@ -4,11 +4,6 @@ node_modules
 .env*
 !.env.local.example
 
-# Python
-etl/.venv
-__pycache__/
-*.pyc
-
 # Data
 data/*.db*
 
