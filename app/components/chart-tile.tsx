@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react'; // ⬅ add useState
 import { useQuery } from '@tanstack/react-query';
 import { Card } from '@/components/ui/card';
 import { useTheme } from 'next-themes';
@@ -28,6 +28,8 @@ export default function ChartTile({
   const roRef = useRef<ResizeObserver | null>(null);
   const { theme } = useTheme();
 
+  const [chartReady, setChartReady] = useState(false); // ⬅ NEW
+
   // OHLC fetch
   const { data } = useQuery({
     queryKey: ['ohlc', ticker, days],
@@ -54,6 +56,7 @@ export default function ChartTile({
   // Create chart on client, ensure non-zero container size first
   useEffect(() => {
     let cancelled = false;
+    setChartReady(false); // ⬅ chart is not ready yet
 
     const init = async () => {
       if (!containerRef.current || chartRef.current) return;
@@ -73,7 +76,7 @@ export default function ChartTile({
         if (h <= 0) h = height;
       }
 
-      const { createChart,BarSeries } = await import('lightweight-charts'); // ⬅ only createChart
+      const { createChart, BarSeries } = await import('lightweight-charts'); // ⬅ unchanged
     
       if (cancelled || !containerRef.current) return;
 
@@ -91,13 +94,14 @@ export default function ChartTile({
       });
       chartRef.current = chart;
 
-      // ✅ correct API for OHLC bars
       const series = chart.addSeries(BarSeries,{
         upColor: colors.up,
         downColor: colors.down,
         priceLineVisible: false,
       });
       seriesRef.current = series;
+
+      setChartReady(true); // ⬅ NOW the series is ready
 
       // keep chart width in sync
       const ro = new ResizeObserver(entries => {
@@ -122,8 +126,9 @@ export default function ChartTile({
         chartRef.current = null;
         seriesRef.current = null;
       }
+      setChartReady(false); // ⬅ reset on unmount
     };
-  }, [height, colors]);
+  }, [height, colors]); // ⬅ deps untouched
 
   // Update theme colors dynamically
   useEffect(() => {
@@ -145,9 +150,8 @@ export default function ChartTile({
 
   // Set data
   useEffect(() => {
-    if (!data?.data || !seriesRef.current) return;
+    if (!chartReady || !data?.data || !seriesRef.current) return; // ⬅ also wait for chartReady
 
-    // Convert ISO "YYYY-MM-DD" → BusinessDay {year, month, day}
     const formatted = data.data
       .filter((p: any) => p?.time && p.open != null && p.high != null && p.low != null && p.close != null)
       .map((p: any) => {
@@ -162,7 +166,7 @@ export default function ChartTile({
       seriesRef.current.setData(formatted as any);
       chartRef.current?.timeScale().fitContent();
     }
-  }, [data]);
+  }, [data, chartReady]); // ⬅ chartReady added to deps
 
   return (
     <Card className="p-2">

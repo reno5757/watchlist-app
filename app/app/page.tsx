@@ -3,6 +3,7 @@
 import { useQuery } from '@tanstack/react-query';
 import Link from 'next/link';
 import { Card } from '@/components/ui/card';
+import AddWatchlistModal from '@/components/add-watchlist-modal';
 
 type Watchlist = {
   id: number;
@@ -26,15 +27,25 @@ export default function Home() {
   if (error) return <p className="text-red-500">Error loading watchlists</p>;
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
-      {data!.map((wl) => (
-        <Link key={wl.id} href={`/watchlist/${wl.id}`}>
-          <Card className="p-4 hover:bg-accent/30 transition">
-            <h2 className="text-lg font-semibold">{wl.title}</h2>
-            {wl.intro ? <p className="text-sm text-muted-foreground">{wl.intro}</p> : null}
-          </Card>
-        </Link>
-      ))}
+    <div className="space-y-4">
+      {/*      TOP BUTTON       */}
+      <div className="flex justify-end">
+        <AddWatchlistModal />     {/* ← your modal trigger button */}
+      </div>
+
+      {/*   WATCHLISTS GRID     */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        {data!.map((wl) => (
+          <Link key={wl.id} href={`/watchlist/${wl.id}`}>
+            <Card className="p-4 hover:bg-accent/30 transition">
+              <h2 className="text-lg font-semibold">{wl.title}</h2>
+              {wl.intro ? (
+                <p className="text-sm text-muted-foreground">{wl.intro}</p>
+              ) : null}
+            </Card>
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }

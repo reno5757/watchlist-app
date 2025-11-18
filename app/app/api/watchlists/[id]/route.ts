@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAppDb } from '@/lib/db-app';
 
-// Note: params is a Promise in Next 15 route handlers
+// ---- existing GET handler kept as-is ----
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const db = getAppDb();
-  const { id } = await ctx.params;            // ← unwrap the Promise
+  const { id } = await ctx.params;
   const url = new URL(req.url);
   const commentsMode = url.searchParams.get('comments');
 
@@ -51,4 +51,65 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
       perf_ytd: null,
     })),
   });
+}
+
+// ---- NEW: update title / intro ----
+export async function PATCH(
+  req: NextRequest,
+  ctx: { params: Promise<{ id: string }> }
+) {
+  const db = getAppDb();
+  const { id } = await ctx.params;
+  const wlId = Number(id);
+  if (!Number.isFinite(wlId)) {
+    return NextResponse.json({ error: 'Invalid watchlist id' }, { status: 400 });
+  }
+
+  const body = await req.json().catch(() => ({}));
+  const title = typeof body.title === 'string' ? body.title.trim() : undefined;
+  const intro = typeof body.intro === 'string' ? body.intro.trim() : undefined;
+
+  if (title === undefined && intro === undefined) {
+    return NextResponse.json(
+      { error: 'Nothing to update' },
+      { status: 400 }
+    );
+  }
+
+  const existing = db
+    .prepare(`SELECT id, title, intro FROM watchlists WHERE id = ?`)
+    .get(wlId);
+  if (!existing) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+
+  const newTitle = title !== undefined ? title : existing.title;
+  const newIntro = intro !== undefined ? (intro || null) : existing.intro;
+
+  db.prepare(
+    `UPDATE watchlists SET title = ?, intro = ? WHERE id = ?`
+  ).run(newTitle, newIntro, wlId);
+
+  return NextResponse.json({ id: wlId, title: newTitle, intro: newIntro });
+}
+
+// ---- NEW: delete watchlist (items will cascade) ----
+export async function DELETE(
+  _req: NextRequest,
+  ctx: { params: Promise<{ id: string }> }
+) {
+  const db = getAppDb();
+  const { id } = await ctx.params;
+  const wlId = Number(id);
+  if (!Number.isFinite(wlId)) {
+    return NextResponse.json({ error: 'Invalid watchlist id' }, { status: 400 });
+  }
+
+  const res = db.prepare(`DELETE FROM watchlists WHERE id = ?`).run(wlId);
+
+  if (res.changes === 0) {
+    return NextResponse.json({ error: 'Not found' }, { status: 404 });
+  }
+
+  return NextResponse.json({ success: true });
 }
