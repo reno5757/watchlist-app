@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import ChartTile from '@/components/chart-tile';
 import {
   Select,
@@ -9,7 +10,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import type { WatchlistPayload, WatchlistItemRow } from '@/app/watchlist/[id]/page';
+import type {
+  WatchlistPayload,
+  WatchlistItemRow,
+} from '@/app/watchlist/[id]/page';
+
+type ChartEmaLine = {
+  id: string;
+  length: number;
+  color: string;
+  visible: boolean;
+};
+
+type ChartEmaConfig = {
+  emas_enabled: boolean;
+  lines: ChartEmaLine[];
+};
 
 type Props = {
   watchlist: WatchlistPayload;
@@ -21,6 +37,23 @@ export default function WatchlistChartTab({ watchlist }: Props) {
   const [groupBySubcat, setGroupBySubcat] = useState<boolean>(
     watchlist.group_by_subcategory === 1
   );
+  const [saving, setSaving] = useState(false);
+
+  // 1) Load global EMA settings for the whole app
+  const {
+    data: emaConfig,
+    isLoading: emaLoading,
+    error: emaError,
+  } = useQuery<ChartEmaConfig>({
+    queryKey: ['chart-ema-config'],
+    queryFn: async () => {
+      const res = await fetch('/api/settings/chart-ema', {
+        cache: 'no-store',
+      });
+      if (!res.ok) throw new Error('Failed to load EMA config');
+      return res.json();
+    },
+  });
 
   const groupedItems = useMemo(() => {
     if (!groupBySubcat) return null;
@@ -36,6 +69,37 @@ export default function WatchlistChartTab({ watchlist }: Props) {
     }
     return groups;
   }, [watchlist.items, groupBySubcat]);
+
+  const handleToggleGroupBySubcat = async () => {
+    const next = !groupBySubcat;
+
+    // optimistic UI
+    setGroupBySubcat(next);
+    setSaving(true);
+
+    try {
+      const res = await fetch(`/api/watchlists/${watchlist.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          group_by_subcategory: next ? 1 : 0,
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+    } catch (err) {
+      console.error('Failed to update group_by_subcategory', err);
+      setGroupBySubcat((prev) => !prev);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const showEmas =
+    emaConfig?.emas_enabled &&
+    emaConfig.lines?.some((l) => l.visible && l.length > 0);
 
   return (
     <div className="space-y-4">
@@ -75,19 +139,41 @@ export default function WatchlistChartTab({ watchlist }: Props) {
           </Select>
         </div>
 
-        <div className="ml-auto flex items-center gap-2">
+        <div className="ml-auto flex items-center gap-3">
+          {/* Optional tiny status for EMAs */}
+          {emaLoading && (
+            <span className="text-xs text-muted-foreground">
+              Loading EMAs…
+            </span>
+          )}
+          {emaError && (
+            <span className="text-xs text-red-500">
+              EMA config error
+            </span>
+          )}
+          {showEmas && !emaLoading && !emaError && (
+            <span className="text-xs text-muted-foreground">
+              EMAs:&nbsp;
+              {emaConfig!.lines
+                .filter((l) => l.visible)
+                .map((l) => l.length)
+                .join(', ')}
+            </span>
+          )}
+
           <span className="text-sm text-muted-foreground">
             Group by subcategory
           </span>
           <button
             type="button"
-            onClick={() => setGroupBySubcat((v) => !v)}
+            onClick={handleToggleGroupBySubcat}
+            disabled={saving}
             className={`inline-flex h-7 items-center rounded-full border px-2 text-xs transition
               ${
                 groupBySubcat
                   ? 'border-primary bg-primary/10 text-primary'
                   : 'border-zinc-700 bg-zinc-900 text-zinc-300'
-              }`}
+              } ${saving ? 'opacity-60 cursor-not-allowed' : ''}`}
           >
             <span
               className={`mr-1 inline-block h-3 w-3 rounded-full ${
@@ -114,6 +200,7 @@ export default function WatchlistChartTab({ watchlist }: Props) {
               watchlistItemId={it.item_id}
               days={days}
               height={240}
+              emaConfig={emaConfig} // <-- pass EMA config down
             />
           ))}
         </div>
@@ -148,6 +235,7 @@ export default function WatchlistChartTab({ watchlist }: Props) {
                     watchlistItemId={it.item_id}
                     days={days}
                     height={240}
+                    emaConfig={emaConfig} // <-- same here
                   />
                 ))}
               </div>

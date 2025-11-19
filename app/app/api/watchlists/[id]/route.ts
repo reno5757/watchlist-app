@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAppDb } from '@/lib/db-app';
 
-// ---- existing GET handler kept as-is ----
+// GET handler 
 export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const db = getAppDb();
   const { id } = await ctx.params;
@@ -53,7 +53,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   });
 }
 
-// ---- update title / intro ----
+// ---- update title / intro / group_by_subcategory ----
 export async function PATCH(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> }
@@ -66,10 +66,24 @@ export async function PATCH(
   }
 
   const body = await req.json().catch(() => ({}));
-  const title = typeof body.title === 'string' ? body.title.trim() : undefined;
-  const intro = typeof body.intro === 'string' ? body.intro.trim() : undefined;
 
-  if (title === undefined && intro === undefined) {
+  const title =
+    typeof body.title === 'string' ? body.title.trim() : undefined;
+  const intro =
+    typeof body.intro === 'string' ? body.intro.trim() : undefined;
+
+  // NEW: accept group_by_subcategory as boolean or 0/1
+  let groupFlag: number | undefined;
+  if (typeof body.group_by_subcategory === 'boolean') {
+    groupFlag = body.group_by_subcategory ? 1 : 0;
+  } else if (
+    body.group_by_subcategory === 0 ||
+    body.group_by_subcategory === 1
+  ) {
+    groupFlag = body.group_by_subcategory;
+  }
+
+  if (title === undefined && intro === undefined && groupFlag === undefined) {
     return NextResponse.json(
       { error: 'Nothing to update' },
       { status: 400 }
@@ -77,21 +91,36 @@ export async function PATCH(
   }
 
   const existing = db
-    .prepare(`SELECT id, title, intro FROM watchlists WHERE id = ?`)
+    .prepare(
+      `SELECT id, title, intro, group_by_subcategory
+       FROM watchlists
+       WHERE id = ?`
+    )
     .get(wlId);
   if (!existing) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 });
   }
 
   const newTitle = title !== undefined ? title : existing.title;
-  const newIntro = intro !== undefined ? (intro || null) : existing.intro;
+  const newIntro =
+    intro !== undefined ? (intro || null) : existing.intro;
+  const newGroupFlag =
+    groupFlag !== undefined ? groupFlag : existing.group_by_subcategory;
 
   db.prepare(
-    `UPDATE watchlists SET title = ?, intro = ? WHERE id = ?`
-  ).run(newTitle, newIntro, wlId);
+    `UPDATE watchlists
+       SET title = ?, intro = ?, group_by_subcategory = ?
+     WHERE id = ?`
+  ).run(newTitle, newIntro, newGroupFlag, wlId);
 
-  return NextResponse.json({ id: wlId, title: newTitle, intro: newIntro });
+  return NextResponse.json({
+    id: wlId,
+    title: newTitle,
+    intro: newIntro,
+    group_by_subcategory: newGroupFlag,
+  });
 }
+
 
 // ---- delete watchlist (items will cascade) ----
 export async function DELETE(

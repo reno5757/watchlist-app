@@ -7,10 +7,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="min-h-screen bg-background text-foreground">
-        <div className="mx-auto max-w-6xl p-4">
+        <div className="mx-auto p-4">
           <header className="mb-6">
-            <h1 className="text-2xl font-bold">Local Watchlists</h1>
-            <p className="text-muted-foreground">Reads from app_data.db</p>
+            <h1 className="text-2xl font-bold">Watchlists App</h1>
           </header>
           <DataClient>{children}</DataClient>
         </div>
