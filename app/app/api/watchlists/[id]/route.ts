@@ -53,7 +53,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
   });
 }
 
-// ---- NEW: update title / intro ----
+// ---- update title / intro ----
 export async function PATCH(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> }
@@ -93,7 +93,7 @@ export async function PATCH(
   return NextResponse.json({ id: wlId, title: newTitle, intro: newIntro });
 }
 
-// ---- NEW: delete watchlist (items will cascade) ----
+// ---- delete watchlist (items will cascade) ----
 export async function DELETE(
   _req: NextRequest,
   ctx: { params: Promise<{ id: string }> }

@@ -3,11 +3,10 @@ import { getAppDb } from '@/lib/db-app';
 
 export async function POST(
   req: NextRequest,
-  ctx: { params: Promise<{ id: string }> }
+  { params }: { params: { id: string } }
 ) {
   const db = getAppDb();
-  const { id } = await ctx.params;
-  const wlId = Number(id);
+  const wlId = Number(params.id);
   if (!Number.isFinite(wlId)) {
     return NextResponse.json({ error: 'Invalid watchlist id' }, { status: 400 });
   }
@@ -24,9 +23,7 @@ export async function POST(
   }
 
   // Ensure WL exists
-  const wl = db
-    .prepare(`SELECT id FROM watchlists WHERE id = ?`)
-    .get(wlId);
+  const wl = db.prepare(`SELECT id FROM watchlists WHERE id = ?`).get(wlId);
   if (!wl) {
     return NextResponse.json({ error: 'Watchlist not found' }, { status: 404 });
   }
@@ -39,14 +36,9 @@ export async function POST(
 
   return NextResponse.json(
     {
-      item_id: result.lastInsertRowid,
+      item_id: Number(result.lastInsertRowid),
       ticker,
       subcategory,
-      last_price: null,
-      perf_d: null,
-      perf_w: null,
-      perf_m: null,
-      perf_ytd: null,
     },
     { status: 201 }
   );
