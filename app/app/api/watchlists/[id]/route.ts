@@ -44,11 +44,7 @@ export async function GET(req: NextRequest, ctx: { params: Promise<{ id: string 
     ...wl,
     items: items.map((r: any) => ({
       ...r,
-      last_price: null,
-      perf_d: null,
-      perf_w: null,
-      perf_m: null,
-      perf_ytd: null,
+      last_price: null
     })),
   });
 }

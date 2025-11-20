@@ -10,7 +10,8 @@ type MetricsRow = {
   return_5d: number | null;
   return_21d: number | null;
   return_63d: number | null;
-  return_ytd: number | null;
+  return_126d: number | null;
+  return_252d: number | null;
   ma10_slope: number | null;
   ma20_slope: number | null;
   ma50_slope: number | null;

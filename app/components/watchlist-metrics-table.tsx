@@ -18,7 +18,8 @@ type MetricsRow = {
   return_5d: number | null;
   return_21d: number | null;
   return_63d: number | null;
-  return_ytd: number | null;
+  return_126d: number | null;
+  return_252d: number | null;
   ma10_slope: number | null;
   ma20_slope: number | null;
   ma50_slope: number | null;
@@ -68,7 +69,7 @@ export default function WatchlistMetricsTable({ data }: Props) {
     },
     {
       accessorKey: 'return_21d',
-      header: '21D',
+      header: '1M',
       cell: (info) => {
         const v = info.getValue<number | null>();
         return (
@@ -78,7 +79,7 @@ export default function WatchlistMetricsTable({ data }: Props) {
     },
     {
       accessorKey: 'return_63d',
-      header: '63D',
+      header: '3M',
       cell: (info) => {
         const v = info.getValue<number | null>();
         return (
@@ -87,8 +88,17 @@ export default function WatchlistMetricsTable({ data }: Props) {
       },
     },
     {
-      accessorKey: 'return_ytd',
-      header: 'YTD',
+      accessorKey: 'return_126d',
+      header: '6M',
+      cell: (info) => {
+        const v = info.getValue<number | null>();
+        return (
+          <span className={perfClass(v)}>{formatPct(v)}</span>
+        );
+      },
+    },{
+      accessorKey: 'return_252d',
+      header: '12M',
       cell: (info) => {
         const v = info.getValue<number | null>();
         return (

@@ -7,6 +7,8 @@ import EditWatchlistModal from '@/components/edit-watchlist-modal';
 import WatchlistChartTab from '@/components/watchlist-chart-tab';
 import WatchlistMetricsTab from '@/components/watchlist-metrics-tab';
 import WatchlistRadar from '@/components/WatchlistRadar'; 
+import WatchlistPerformance from '@/components/WatchlistPerformance';
+import WatchlistDrawdownVsReturnChart from '@/components/WatchlistDrawdownVsReturnChart';
 
 type WatchlistItemRow = {
   item_id: number;
@@ -102,6 +104,35 @@ export default function WatchlistPage() {
         >
           AS Radar
         </TabsTrigger>
+        
+        <TabsTrigger
+          value="performance-chart"
+          className="
+            px-4 py-1.5 text-xs font-medium rounded-full
+            text-zinc-400 transition-all
+            hover:text-zinc-200 hover:bg-zinc-700/30
+            data-[state=active]:bg-zinc-100
+            data-[state=active]:text-zinc-900
+            data-[state=active]:shadow-sm
+          "
+        >
+          Performance Chart
+        </TabsTrigger>
+
+        <TabsTrigger
+          value="drawdown-chart"
+          className="
+            px-4 py-1.5 text-xs font-medium rounded-full
+            text-zinc-400 transition-all
+            hover:text-zinc-200 hover:bg-zinc-700/30
+            data-[state=active]:bg-zinc-100
+            data-[state=active]:text-zinc-900
+            data-[state=active]:shadow-sm
+          "
+        >
+          Risk Return
+        </TabsTrigger>
+        
       </TabsList>
 
         </div>
@@ -114,9 +145,16 @@ export default function WatchlistPage() {
           <WatchlistMetricsTab watchlistId={data.id} />
         </TabsContent>
 
-        {/* ⬇️ New radar tab content */}
         <TabsContent value="as-radar">
           <WatchlistRadar watchlistId={data.id} />
+        </TabsContent>
+
+        <TabsContent value="performance-chart">
+          <WatchlistPerformance watchlist={data} />
+        </TabsContent>
+
+        <TabsContent value="drawdown-chart">
+          <WatchlistDrawdownVsReturnChart watchlistId={data.id} />
         </TabsContent>
       </Tabs>
     </div>

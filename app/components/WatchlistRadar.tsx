@@ -117,10 +117,18 @@ export default function WatchlistRadar({ watchlistId }: Props) {
           plugins: {
             legend: {
               display: true,
+              position : 'bottom',
               labels: {
                 boxWidth: 10,
                 font: { size: 10 },
               },
+            },
+            title: {
+              display: true,
+              text: row.symbol,
+              padding: { top: 0, bottom: 4 },  
+              font: { size: 14 },
+              color : '#ffffff'
             },
             tooltip: {
               callbacks: {
@@ -153,12 +161,6 @@ export default function WatchlistRadar({ watchlistId }: Props) {
 
         return (
           <Card key={row.symbol} className="p-3">
-            <div className="mb-2 flex items-center justify-between">
-              <div className="text-sm font-semibold">{row.symbol}</div>
-              <div className="text-[10px] text-muted-foreground">
-                Absolute Strength Rank
-              </div>
-            </div>
             <div className="h-56">
               <Radar data={chartData} options={options} />
             </div>

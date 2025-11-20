@@ -23,25 +23,25 @@ export function AbsoluteStrengthBadgesForTicker({ ticker }: { ticker: string }) 
   }
 
   return (
-    <div className="flex items-center gap-1 flex-wrap">
+    <div className="flex items-center gap-1 flex-wrap mb-1">
       <span className="text-xs text-muted-foreground mr-1">
         Absolute AS:
       </span>
 
       <Badge variant="outline" className="px-2 py-0.5 text-[10px]">
-        1M {fmt(data.as_1m_prank)}
+        <span className="text-muted-foreground">1M</span> {fmt(data.as_1m_prank)}
       </Badge>
 
       <Badge variant="outline" className="px-2 py-0.5 text-[10px]">
-        3M {fmt(data.as_3m_prank)}
+        <span className="text-muted-foreground">3M</span> {fmt(data.as_3m_prank)}
       </Badge>
 
       <Badge variant="outline" className="px-2 py-0.5 text-[10px]">
-        6M {fmt(data.as_6m_prank)}
+        <span className="text-muted-foreground">6M</span> {fmt(data.as_6m_prank)}
       </Badge>
 
       <Badge variant="outline" className="px-2 py-0.5 text-[10px]">
-        12M {fmt(data.as_12m_prank)}
+        <span className="text-muted-foreground">12M</span> {fmt(data.as_12m_prank)}
       </Badge>
     </div>
   );

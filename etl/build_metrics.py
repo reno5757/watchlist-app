@@ -5,11 +5,6 @@ import sqlite3
 from pathlib import Path
 
 
-def parse_year(date_str: str) -> int:
-    # date_str is 'YYYY-MM-DD'
-    return int(date_str[:4])
-
-
 def compute_ma(values, window, upto_index):
     """
     Compute moving average up to and including upto_index (0-based).
@@ -98,9 +93,9 @@ def main() -> None:
     metrics_conn = sqlite3.connect(metrics_db_path)
     metrics_cur = metrics_conn.cursor()
 
-    # Timeframes in trading days for Absolute Strength & Sortino-AS
+    # Timeframes in trading days (sessions) for Absolute Strength & Sortino-AS
     TIMEFRAMES = {
-        "1w": 5,    # NEW: 1 week
+        "1w": 5,
         "1m": 21,
         "3m": 63,
         "6m": 126,
@@ -116,12 +111,13 @@ def main() -> None:
                 symbol                      TEXT NOT NULL,
                 date                        TEXT NOT NULL,  -- YYYY-MM-DD
 
-                -- Basic returns
+                -- Basic returns (all in trading sessions)
                 daily_return                REAL,
                 return_5d                   REAL,
                 return_21d                  REAL,
                 return_63d                  REAL,
-                return_ytd                  REAL,
+                return_126d                 REAL,           -- ~6m
+                return_252d                 REAL,           -- ~12m
 
                 -- Moving average slopes (-1 = down, 0 = flat, 1 = up)
                 ma10_slope                  INTEGER,
@@ -129,7 +125,7 @@ def main() -> None:
                 ma50_slope                  INTEGER,
                 ma200_slope                 INTEGER,
 
-                -- 52-week distances
+                -- 52-week distances (252 trading sessions)
                 dist_52w_high               REAL,           -- (close / 52w_high) - 1
                 dist_52w_low                REAL,           -- (close / 52w_low)  - 1
 
@@ -181,8 +177,6 @@ def main() -> None:
         print(f"[INFO] Symbols on that date: {total_symbols}")
         print("[INFO] Computing metrics symbol by symbol...")
 
-        latest_year = parse_year(latest_date)
-
         metrics_by_symbol = {}
 
         for idx, symbol in enumerate(symbols, start=1):
@@ -211,7 +205,7 @@ def main() -> None:
 
             close_latest = closes[latest_idx]
 
-            # --- Returns ---
+            # --- Returns (all based on trading sessions / indices) ---
 
             daily_return = None
             if latest_idx >= 1:
@@ -237,16 +231,19 @@ def main() -> None:
                 if close_63d_ago != 0:
                     return_63d = (close_latest / close_63d_ago) - 1
 
-            return_ytd = None
-            first_ytd_idx = None
-            for i, d in enumerate(dates):
-                if parse_year(d) == latest_year:
-                    first_ytd_idx = i
-                    break
-            if first_ytd_idx is not None:
-                ytd_start_close = closes[first_ytd_idx]
-                if ytd_start_close != 0:
-                    return_ytd = (close_latest / ytd_start_close) - 1
+            # 6-month return (126 trading sessions)
+            return_126d = None
+            if latest_idx >= 126:
+                close_126d_ago = closes[latest_idx - 126]
+                if close_126d_ago != 0:
+                    return_126d = (close_latest / close_126d_ago) - 1
+
+            # 12-month return (252 trading sessions)
+            return_252d = None
+            if latest_idx >= 252:
+                close_252d_ago = closes[latest_idx - 252]
+                if close_252d_ago != 0:
+                    return_252d = (close_latest / close_252d_ago) - 1
 
             # --- Moving averages and slopes ---
 
@@ -299,6 +296,7 @@ def main() -> None:
 
             for tf_label, tf_days in TIMEFRAMES.items():
                 if latest_idx >= tf_days:
+                    # tf_days = number of trading sessions back from latest_idx
                     start_idx = latest_idx - tf_days
                     window_prices = closes[start_idx : latest_idx + 1]
 
@@ -331,7 +329,8 @@ def main() -> None:
                 "return_5d": return_5d,
                 "return_21d": return_21d,
                 "return_63d": return_63d,
-                "return_ytd": return_ytd,
+                "return_126d": return_126d,
+                "return_252d": return_252d,
                 "ma10_slope": ma10_slope,
                 "ma20_slope": ma20_slope,
                 "ma50_slope": ma50_slope,
@@ -415,7 +414,8 @@ def main() -> None:
                     return_5d,
                     return_21d,
                     return_63d,
-                    return_ytd,
+                    return_126d,
+                    return_252d,
                     ma10_slope,
                     ma20_slope,
                     ma50_slope,
@@ -437,7 +437,7 @@ def main() -> None:
                     sortino_as_3m_prank,
                     sortino_as_6m_prank,
                     sortino_as_12m_prank
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                 """,
                 (
                     data["symbol"],
@@ -446,7 +446,8 @@ def main() -> None:
                     data["return_5d"],
                     data["return_21d"],
                     data["return_63d"],
-                    data["return_ytd"],
+                    data["return_126d"],
+                    data["return_252d"],
                     data["ma10_slope"],
                     data["ma20_slope"],
                     data["ma50_slope"],

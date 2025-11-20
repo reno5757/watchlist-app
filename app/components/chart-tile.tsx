@@ -145,8 +145,8 @@ export default function ChartTile({
     const dark = theme === 'dark' || theme === 'system';
     return {
       bg: 'transparent',
-      text: dark ? '#e5e7eb' : '#111827',
-      grid: dark ? '#1f2937' : '#e5e7eb',
+      text: dark ? '#e5e7eb' : '#282829ff',
+      grid: dark ? '#282829ff' : '#e5e7eb',
       up: '#ffffff', // white bars
       down: '#ffffff', // white bars
       wick: dark ? '#9ca3af' : '#6b7280',

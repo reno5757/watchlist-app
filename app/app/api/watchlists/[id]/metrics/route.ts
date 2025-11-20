@@ -10,7 +10,8 @@ type MetricsRow = {
   return_5d: number | null;
   return_21d: number | null;
   return_63d: number | null;
-  return_ytd: number | null;
+  return_126d: number | null;
+  return_252d: number | null;
   ma10_slope: number | null;
   ma20_slope: number | null;
   ma50_slope: number | null;
@@ -90,7 +91,8 @@ export async function GET(
         return_5d,
         return_21d,
         return_63d,
-        return_ytd,
+        return_126d,
+        return_252d,
         ma10_slope,
         ma20_slope,
         ma50_slope,
