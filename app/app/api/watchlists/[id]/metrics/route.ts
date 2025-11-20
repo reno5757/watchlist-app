@@ -17,13 +17,34 @@ type MetricsRow = {
   ma200_slope: number | null;
   dist_52w_high: number | null;
   dist_52w_low: number | null;
+
+  // New drawdown fields (positive fractions, e.g. 0.25 for -25%)
+  mdd_1w: number | null;
+  mdd_1m: number | null;
+  mdd_3m: number | null;
+  mdd_6m: number | null;
+  mdd_12m: number | null;
+
+  // Absolute Strength percentile ranks (0 = worst, 100 = best)
+  as_1w_prank: number | null;
+  as_1m_prank: number | null;
+  as_3m_prank: number | null;
+  as_6m_prank: number | null;
+  as_12m_prank: number | null;
+
+  // Sortino-AS percentile ranks (0 = worst, 100 = best)
+  sortino_as_1w_prank: number | null;
+  sortino_as_1m_prank: number | null;
+  sortino_as_3m_prank: number | null;
+  sortino_as_6m_prank: number | null;
+  sortino_as_12m_prank: number | null;
 };
 
 export async function GET(
   req: Request,
   ctx: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await ctx.params;  // IMPORTANT: await the promise
+  const { id } = await ctx.params; // IMPORTANT: await the promise
   const watchlistId = Number(id);
 
   if (!Number.isFinite(watchlistId)) {
@@ -75,7 +96,22 @@ export async function GET(
         ma50_slope,
         ma200_slope,
         dist_52w_high,
-        dist_52w_low
+        dist_52w_low,
+        mdd_1w,
+        mdd_1m,
+        mdd_3m,
+        mdd_6m,
+        mdd_12m,
+        as_1w_prank,
+        as_1m_prank,
+        as_3m_prank,
+        as_6m_prank,
+        as_12m_prank,
+        sortino_as_1w_prank,
+        sortino_as_1m_prank,
+        sortino_as_3m_prank,
+        sortino_as_6m_prank,
+        sortino_as_12m_prank
       FROM metrics
       WHERE date = ?
         AND symbol IN (${placeholders})

@@ -6,6 +6,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import EditWatchlistModal from '@/components/edit-watchlist-modal';
 import WatchlistChartTab from '@/components/watchlist-chart-tab';
 import WatchlistMetricsTab from '@/components/watchlist-metrics-tab';
+import WatchlistRadar from '@/components/WatchlistRadar'; 
 
 type WatchlistItemRow = {
   item_id: number;
@@ -59,20 +60,50 @@ export default function WatchlistPage() {
 
       <Tabs defaultValue="charts" className="space-y-4">
         <div className="flex items-center justify-between">
-          <TabsList className="inline-flex h-9 items-center rounded-full border border-zinc-700 bg-zinc-900/80 p-1 shadow-sm">
-            <TabsTrigger
-              value="charts"
-              className="px-4 py-1.5 text-xs font-medium rounded-full text-zinc-400 data-[state=active]:bg-zinc-100 data-[state=active]:text-zinc-900 data-[state=active]:shadow-sm transition"
-            >
-              Charts
-            </TabsTrigger>
-            <TabsTrigger
-              value="metrics"
-              className="px-4 py-1.5 text-xs font-medium rounded-full text-zinc-400 data-[state=active]:bg-zinc-100 data-[state=active]:text-zinc-900 data-[state=active]:shadow-sm transition"
-            >
-              Metrics
-            </TabsTrigger>
-          </TabsList>
+       <TabsList className="inline-flex h-9 items-center rounded-full border border-zinc-700 bg-zinc-900/80 p-1 shadow-sm">
+        <TabsTrigger
+          value="charts"
+          className="
+            px-4 py-1.5 text-xs font-medium rounded-full
+            text-zinc-400 transition-all
+            hover:text-zinc-200 hover:bg-zinc-700/30
+            data-[state=active]:bg-zinc-100
+            data-[state=active]:text-zinc-900
+            data-[state=active]:shadow-sm
+          "
+        >
+          Charts
+        </TabsTrigger>
+
+        <TabsTrigger
+          value="metrics"
+          className="
+            px-4 py-1.5 text-xs font-medium rounded-full
+            text-zinc-400 transition-all
+            hover:text-zinc-200 hover:bg-zinc-700/30
+            data-[state=active]:bg-zinc-100
+            data-[state=active]:text-zinc-900
+            data-[state=active]:shadow-sm
+          "
+        >
+          Metrics
+        </TabsTrigger>
+
+        <TabsTrigger
+          value="as-radar"
+          className="
+            px-4 py-1.5 text-xs font-medium rounded-full
+            text-zinc-400 transition-all
+            hover:text-zinc-200 hover:bg-zinc-700/30
+            data-[state=active]:bg-zinc-100
+            data-[state=active]:text-zinc-900
+            data-[state=active]:shadow-sm
+          "
+        >
+          AS Radar
+        </TabsTrigger>
+      </TabsList>
+
         </div>
 
         <TabsContent value="charts">
@@ -81,6 +112,11 @@ export default function WatchlistPage() {
 
         <TabsContent value="metrics">
           <WatchlistMetricsTab watchlistId={data.id} />
+        </TabsContent>
+
+        {/* ⬇️ New radar tab content */}
+        <TabsContent value="as-radar">
+          <WatchlistRadar watchlistId={data.id} />
         </TabsContent>
       </Tabs>
     </div>

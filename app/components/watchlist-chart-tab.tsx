@@ -15,16 +15,21 @@ import type {
   WatchlistItemRow,
 } from '@/app/watchlist/[id]/page';
 
-type ChartEmaLine = {
+// ==== Updated types: EMA + SMA support ====
+
+type MovingAverageType = 'ema' | 'sma';
+
+type ChartMaLine = {
   id: string;
+  type: MovingAverageType;
   length: number;
   color: string;
   visible: boolean;
 };
 
-type ChartEmaConfig = {
-  emas_enabled: boolean;
-  lines: ChartEmaLine[];
+type ChartMaConfig = {
+  ma_enabled: boolean;
+  lines: ChartMaLine[];
 };
 
 type Props = {
@@ -39,18 +44,18 @@ export default function WatchlistChartTab({ watchlist }: Props) {
   );
   const [saving, setSaving] = useState(false);
 
-  // 1) Load global EMA settings for the whole app
+  // 1) Load global MA (EMA/SMA) settings for the whole app
   const {
-    data: emaConfig,
+    data: maConfig,
     isLoading: emaLoading,
     error: emaError,
-  } = useQuery<ChartEmaConfig>({
-    queryKey: ['chart-ema-config'],
+  } = useQuery<ChartMaConfig>({
+    queryKey: ['chart-ma-config'],
     queryFn: async () => {
       const res = await fetch('/api/settings/chart-ema', {
         cache: 'no-store',
       });
-      if (!res.ok) throw new Error('Failed to load EMA config');
+      if (!res.ok) throw new Error('Failed to load MA config');
       return res.json();
     },
   });
@@ -97,9 +102,9 @@ export default function WatchlistChartTab({ watchlist }: Props) {
     }
   };
 
-  const showEmas =
-    emaConfig?.emas_enabled &&
-    emaConfig.lines?.some((l) => l.visible && l.length > 0);
+  const showMas =
+    maConfig?.ma_enabled &&
+    maConfig.lines?.some((l) => l.visible && l.length > 0);
 
   return (
     <div className="space-y-4">
@@ -140,23 +145,23 @@ export default function WatchlistChartTab({ watchlist }: Props) {
         </div>
 
         <div className="ml-auto flex items-center gap-3">
-          {/* Optional tiny status for EMAs */}
+          {/* Optional tiny status for MAs */}
           {emaLoading && (
             <span className="text-xs text-muted-foreground">
-              Loading EMAs…
+              Loading MAs…
             </span>
           )}
           {emaError && (
             <span className="text-xs text-red-500">
-              EMA config error
+              MA config error
             </span>
           )}
-          {showEmas && !emaLoading && !emaError && (
+          {showMas && !emaLoading && !emaError && (
             <span className="text-xs text-muted-foreground">
-              EMAs:&nbsp;
-              {emaConfig!.lines
-                .filter((l) => l.visible)
-                .map((l) => l.length)
+              MAs:&nbsp;
+              {maConfig!.lines
+                .filter((l) => l.visible && l.length > 0)
+                .map((l) => `${l.type.toUpperCase()} ${l.length}`)
                 .join(', ')}
             </span>
           )}
@@ -200,7 +205,7 @@ export default function WatchlistChartTab({ watchlist }: Props) {
               watchlistItemId={it.item_id}
               days={days}
               height={240}
-              emaConfig={emaConfig} // <-- pass EMA config down
+              maConfig={maConfig} // now MaConfig, handled in ChartTile,
             />
           ))}
         </div>
@@ -235,7 +240,7 @@ export default function WatchlistChartTab({ watchlist }: Props) {
                     watchlistItemId={it.item_id}
                     days={days}
                     height={240}
-                    emaConfig={emaConfig} // <-- same here
+                    maConfig={maConfig}
                   />
                 ))}
               </div>

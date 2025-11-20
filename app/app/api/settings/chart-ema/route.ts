@@ -1,83 +1,102 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAppDb } from '@/lib/db-app';
 
-type ChartEmaLine = {
+type MovingAverageType = 'ema' | 'sma';
+
+type ChartMaLine = {
   id: string;
+  type: MovingAverageType;
   length: number;
   color: string;
   visible: boolean;
 };
 
-type ChartEmaConfig = {
-  emas_enabled: boolean;
-  lines: ChartEmaLine[];
+type ChartMaConfig = {
+  ma_enabled: boolean;
+  lines: ChartMaLine[];
 };
 
-const DEFAULT_EMA_CONFIG: ChartEmaConfig = {
-  emas_enabled: true,
+// Default: EMA-only, but with type = "ema"
+const DEFAULT_MA_CONFIG: ChartMaConfig = {
+  ma_enabled: true,
   lines: [
-    { id: 'ema20', length: 20, color: '#f97316', visible: true },  // orange-ish
-    { id: 'ema50', length: 50, color: '#22c55e', visible: true },  // green-ish
-    { id: 'ema200', length: 200, color: '#60a5fa', visible: true } // blue-ish
+    { id: 'ema20', type: 'ema', length: 20, color: '#f97316', visible: true },   // orange-ish
+    { id: 'ema50', type: 'ema', length: 50, color: '#22c55e', visible: true },   // green-ish
+    { id: 'ema200', type: 'ema', length: 200, color: '#60a5fa', visible: true }, // blue-ish
   ],
 };
 
-const SETTINGS_KEY = 'chart_ema_config';
+// Keep the same key so existing DB rows are reused
+const SETTINGS_KEY = 'chart_ma_config';
 
-function parseConfig(value: string | null | undefined): ChartEmaConfig {
-  if (!value) return DEFAULT_EMA_CONFIG;
+function parseConfig(value: string | null | undefined): ChartMaConfig {
+  if (!value) return DEFAULT_MA_CONFIG;
 
   try {
     const parsed = JSON.parse(value);
 
-    // Very light validation / normalization
     if (typeof parsed !== 'object' || parsed === null) {
-      return DEFAULT_EMA_CONFIG;
+      return DEFAULT_MA_CONFIG;
     }
 
-    const emas_enabled =
-      typeof (parsed as any).emas_enabled === 'boolean'
+    // Support both legacy "emas_enabled" and new "ma_enabled"
+    const ma_enabled =
+      typeof (parsed as any).ma_enabled === 'boolean'
+        ? (parsed as any).ma_enabled
+        : typeof (parsed as any).emas_enabled === 'boolean'
         ? (parsed as any).emas_enabled
-        : DEFAULT_EMA_CONFIG.emas_enabled;
+        : DEFAULT_MA_CONFIG.ma_enabled;
 
     const linesRaw = Array.isArray((parsed as any).lines)
       ? (parsed as any).lines
-      : DEFAULT_EMA_CONFIG.lines;
+      : DEFAULT_MA_CONFIG.lines;
 
-    const lines: ChartEmaLine[] = linesRaw
-      .map((l: any, idx: number): ChartEmaLine | null => {
+    const lines: ChartMaLine[] = linesRaw
+      .map((l: any, idx: number): ChartMaLine | null => {
         const length =
           typeof l.length === 'number' && l.length > 0 ? l.length : null;
+
         const color =
           typeof l.color === 'string' && l.color.trim() !== ''
             ? l.color
             : '#ffffff';
+
         const visible =
           typeof l.visible === 'boolean' ? l.visible : true;
-        const id =
+
+        // Accept explicit type if valid, otherwise default legacy configs to "ema"
+        const type: MovingAverageType =
+          l.type === 'sma' || l.type === 'ema' ? l.type : 'ema';
+
+        const idBase =
           typeof l.id === 'string' && l.id.trim() !== ''
             ? l.id
-            : `ema${length ?? idx}`;
+            : `${type}${length ?? idx}`;
 
         if (!length) return null;
 
-        return { id, length, color, visible };
+        return {
+          id: idBase,
+          type,
+          length,
+          color,
+          visible,
+        };
       })
-      .filter((l): l is ChartEmaLine => l !== null);
+      .filter((l): l is ChartMaLine => l !== null);
 
     return {
-      emas_enabled,
-      lines: lines.length > 0 ? lines : DEFAULT_EMA_CONFIG.lines,
+      ma_enabled,
+      lines: lines.length > 0 ? lines : DEFAULT_MA_CONFIG.lines,
     };
   } catch {
-    return DEFAULT_EMA_CONFIG;
+    return DEFAULT_MA_CONFIG;
   }
 }
 
 export async function GET(_req: NextRequest) {
   const db = getAppDb();
 
-  // Try to read existing setting
   const row = db
     .prepare<{ value: string }>(
       'SELECT value FROM app_settings WHERE key = ?'
@@ -92,7 +111,6 @@ export async function GET(_req: NextRequest) {
       'INSERT INTO app_settings (key, value) VALUES (?, ?)'
     ).run(SETTINGS_KEY, JSON.stringify(config));
   } else {
-    // Optional: keep it normalized if JSON was malformed / incomplete
     const normalizedJson = JSON.stringify(config);
     if (normalizedJson !== row.value) {
       db.prepare(
@@ -101,5 +119,6 @@ export async function GET(_req: NextRequest) {
     }
   }
 
+  // NOTE: frontend now receives: { ma_enabled, lines: [{ id, type, length, color, visible }] }
   return NextResponse.json(config);
 }

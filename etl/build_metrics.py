@@ -3,7 +3,6 @@
 
 import sqlite3
 from pathlib import Path
-from datetime import datetime
 
 
 def parse_year(date_str: str) -> int:
@@ -27,6 +26,59 @@ def compute_ma(values, window, upto_index):
     return sum(slice_vals) / len(slice_vals)
 
 
+def max_drawdown(prices):
+    """
+    Compute maximum drawdown over a sequence of prices.
+    Returns a positive number (e.g. 0.25 for -25% max drawdown).
+    If there is no drawdown, returns 0.0.
+    """
+    if not prices:
+        return None
+
+    peak = prices[0]
+    max_dd = 0.0  # positive fraction
+
+    for p in prices:
+        if p > peak:
+            peak = p
+        if peak > 0:
+            dd = (p / peak) - 1.0  # negative when below peak
+            if dd < 0:
+                max_dd = max(max_dd, -dd)  # store positive magnitude
+
+    return max_dd
+
+
+def compute_percentile_ranks(symbol_to_value):
+    """
+    Given {symbol: value}, where higher is better and some values may be None,
+    return {symbol: percentile_rank}, with:
+        0   = worst
+        100 = best
+    Symbols with None values get percentile_rank=None.
+    """
+    items = [(sym, val) for sym, val in symbol_to_value.items() if val is not None]
+
+    ranks = {sym: None for sym in symbol_to_value.keys()}
+    n = len(items)
+    if n == 0:
+        return ranks
+    if n == 1:
+        sym, _ = items[0]
+        ranks[sym] = 100.0
+        return ranks
+
+    # Sort by value ascending: worst first, best last
+    items.sort(key=lambda x: x[1])
+
+    # Assign percentile: 0 = worst, 100 = best
+    for idx, (sym, _) in enumerate(items):
+        percentile = 100.0 * idx / (n - 1)
+        ranks[sym] = percentile
+
+    return ranks
+
+
 def main() -> None:
     # Locate project root and data directory based on this file's path
     script_path = Path(__file__).resolve()
@@ -46,24 +98,63 @@ def main() -> None:
     metrics_conn = sqlite3.connect(metrics_db_path)
     metrics_cur = metrics_conn.cursor()
 
+    # Timeframes in trading days for Absolute Strength & Sortino-AS
+    TIMEFRAMES = {
+        "1w": 5,    # NEW: 1 week
+        "1m": 21,
+        "3m": 63,
+        "6m": 126,
+        "12m": 252,
+    }
+
     try:
-        # Create metrics table fresh (no schema upgrade logic)
+        # Fresh metrics table (no schema upgrade logic)
+        metrics_cur.execute("DROP TABLE IF EXISTS metrics;")
         metrics_cur.execute(
             """
-            CREATE TABLE IF NOT EXISTS metrics (
-                symbol        TEXT NOT NULL,
-                date          TEXT NOT NULL,  -- YYYY-MM-DD
-                daily_return  REAL,
-                return_5d     REAL,
-                return_21d    REAL,
-                return_63d    REAL,
-                return_ytd    REAL,
-                ma10_slope    INTEGER,        -- -1 = down, 0 = flat, 1 = up
-                ma20_slope    INTEGER,
-                ma50_slope    INTEGER,
-                ma200_slope   INTEGER,
-                dist_52w_high REAL,           -- (close / 52w_high) - 1
-                dist_52w_low  REAL,           -- (close / 52w_low)  - 1
+            CREATE TABLE metrics (
+                symbol                      TEXT NOT NULL,
+                date                        TEXT NOT NULL,  -- YYYY-MM-DD
+
+                -- Basic returns
+                daily_return                REAL,
+                return_5d                   REAL,
+                return_21d                  REAL,
+                return_63d                  REAL,
+                return_ytd                  REAL,
+
+                -- Moving average slopes (-1 = down, 0 = flat, 1 = up)
+                ma10_slope                  INTEGER,
+                ma20_slope                  INTEGER,
+                ma50_slope                  INTEGER,
+                ma200_slope                 INTEGER,
+
+                -- 52-week distances
+                dist_52w_high               REAL,           -- (close / 52w_high) - 1
+                dist_52w_low                REAL,           -- (close / 52w_low)  - 1
+
+                -- Max drawdown per timeframe (positive fraction, e.g. 0.25 for -25%)
+                mdd_1w                      REAL,
+                mdd_1m                      REAL,
+                mdd_3m                      REAL,
+                mdd_6m                      REAL,
+                mdd_12m                     REAL,
+
+                -- Absolute Strength percentile ranks (0 = worst, 100 = best)
+                as_1w_prank                 REAL,
+                as_1m_prank                 REAL,
+                as_3m_prank                 REAL,
+                as_6m_prank                 REAL,
+                as_12m_prank                REAL,
+
+                -- Sortino-AS percentile ranks (perf / max_drawdown)
+                -- 0 = worst, 100 = best
+                sortino_as_1w_prank         REAL,
+                sortino_as_1m_prank         REAL,
+                sortino_as_3m_prank         REAL,
+                sortino_as_6m_prank         REAL,
+                sortino_as_12m_prank        REAL,
+
                 PRIMARY KEY (symbol, date)
             );
             """
@@ -90,10 +181,9 @@ def main() -> None:
         print(f"[INFO] Symbols on that date: {total_symbols}")
         print("[INFO] Computing metrics symbol by symbol...")
 
-        # Begin one transaction for all inserts
-        metrics_conn.execute("BEGIN;")
-
         latest_year = parse_year(latest_date)
+
+        metrics_by_symbol = {}
 
         for idx, symbol in enumerate(symbols, start=1):
             # Fetch full history up to latest_date for this symbol
@@ -114,49 +204,40 @@ def main() -> None:
             closes = [float(r[1]) for r in rows]
             n = len(closes)
 
-            # Index of latest date entry for this symbol
-            # (should be the last one, but we don't assume)
             try:
                 latest_idx = dates.index(latest_date)
             except ValueError:
-                # No point if symbol has no row on latest_date (shouldn't happen)
                 continue
 
             close_latest = closes[latest_idx]
 
             # --- Returns ---
 
-            # Daily return: 1 day ago
             daily_return = None
             if latest_idx >= 1:
                 prev_close = closes[latest_idx - 1]
                 if prev_close != 0:
                     daily_return = (close_latest / prev_close) - 1
 
-            # 5-day return (lag 5)
             return_5d = None
             if latest_idx >= 5:
                 close_5d_ago = closes[latest_idx - 5]
                 if close_5d_ago != 0:
                     return_5d = (close_latest / close_5d_ago) - 1
 
-            # 21-day return
             return_21d = None
             if latest_idx >= 21:
                 close_21d_ago = closes[latest_idx - 21]
                 if close_21d_ago != 0:
                     return_21d = (close_latest / close_21d_ago) - 1
 
-            # 63-day return
             return_63d = None
             if latest_idx >= 63:
                 close_63d_ago = closes[latest_idx - 63]
                 if close_63d_ago != 0:
                     return_63d = (close_latest / close_63d_ago) - 1
 
-            # YTD: from first close of the latest year
             return_ytd = None
-            # find first index in the same year as latest_date
             first_ytd_idx = None
             for i, d in enumerate(dates):
                 if parse_year(d) == latest_year:
@@ -169,13 +250,11 @@ def main() -> None:
 
             # --- Moving averages and slopes ---
 
-            # Today's MAs
             ma10_today = compute_ma(closes, 10, latest_idx)
             ma20_today = compute_ma(closes, 20, latest_idx)
             ma50_today = compute_ma(closes, 50, latest_idx)
             ma200_today = compute_ma(closes, 200, latest_idx)
 
-            # Yesterday's MAs (for slope)
             ma10_prev = compute_ma(closes, 10, latest_idx - 1) if latest_idx >= 1 else None
             ma20_prev = compute_ma(closes, 20, latest_idx - 1) if latest_idx >= 1 else None
             ma50_prev = compute_ma(closes, 50, latest_idx - 1) if latest_idx >= 1 else None
@@ -212,8 +291,121 @@ def main() -> None:
                 if low_52w != 0:
                     dist_52w_low = (close_latest / low_52w) - 1
 
-            # --- Insert into metrics (INSERT OR REPLACE) ---
+            # --- Absolute Strength & Sortino-AS raw values, + MDD per timeframe ---
 
+            abs_returns = {tf: None for tf in TIMEFRAMES.keys()}
+            sortino_vals = {tf: None for tf in TIMEFRAMES.keys()}
+            mdds = {tf: None for tf in TIMEFRAMES.keys()}
+
+            for tf_label, tf_days in TIMEFRAMES.items():
+                if latest_idx >= tf_days:
+                    start_idx = latest_idx - tf_days
+                    window_prices = closes[start_idx : latest_idx + 1]
+
+                    mdd_tf = max_drawdown(window_prices)
+                    mdds[tf_label] = mdd_tf
+
+                    start_price = closes[start_idx]
+                    if start_price != 0:
+                        ret_tf = (close_latest / start_price) - 1.0
+                    else:
+                        ret_tf = None
+
+                    abs_returns[tf_label] = ret_tf
+
+                    if ret_tf is not None and mdd_tf is not None and mdd_tf > 0:
+                        sortino_tf = ret_tf / mdd_tf
+                    else:
+                        sortino_tf = None
+
+                    sortino_vals[tf_label] = sortino_tf
+                else:
+                    mdds[tf_label] = None
+                    abs_returns[tf_label] = None
+                    sortino_vals[tf_label] = None
+
+            metrics_by_symbol[symbol] = {
+                "symbol": symbol,
+                "date": latest_date,
+                "daily_return": daily_return,
+                "return_5d": return_5d,
+                "return_21d": return_21d,
+                "return_63d": return_63d,
+                "return_ytd": return_ytd,
+                "ma10_slope": ma10_slope,
+                "ma20_slope": ma20_slope,
+                "ma50_slope": ma50_slope,
+                "ma200_slope": ma200_slope,
+                "dist_52w_high": dist_52w_high,
+                "dist_52w_low": dist_52w_low,
+                "abs_returns": abs_returns,
+                "sortino_vals": sortino_vals,
+                "mdds": mdds,
+                "as_1w_prank": None,
+                "as_1m_prank": None,
+                "as_3m_prank": None,
+                "as_6m_prank": None,
+                "as_12m_prank": None,
+                "sortino_as_1w_prank": None,
+                "sortino_as_1m_prank": None,
+                "sortino_as_3m_prank": None,
+                "sortino_as_6m_prank": None,
+                "sortino_as_12m_prank": None,
+            }
+
+            if idx == 1 or idx == total_symbols or idx % 100 == 0:
+                percent = idx / total_symbols * 100
+                print(
+                    f"[INFO] Progress: {idx} / {total_symbols} ({percent:.1f}%)",
+                    end="\r",
+                    flush=True,
+                )
+
+        print()  # newline after progress
+
+        # --- Cross-sectional percentile ranks for Absolute Strength and Sortino-AS ---
+
+        for tf_label in TIMEFRAMES.keys():
+            abs_map = {
+                sym: data["abs_returns"][tf_label]
+                for sym, data in metrics_by_symbol.items()
+            }
+            abs_pranks = compute_percentile_ranks(abs_map)
+
+            sortino_map = {
+                sym: data["sortino_vals"][tf_label]
+                for sym, data in metrics_by_symbol.items()
+            }
+            sortino_pranks = compute_percentile_ranks(sortino_map)
+
+            if tf_label == "1w":
+                as_field = "as_1w_prank"
+                sortino_field = "sortino_as_1w_prank"
+            elif tf_label == "1m":
+                as_field = "as_1m_prank"
+                sortino_field = "sortino_as_1m_prank"
+            elif tf_label == "3m":
+                as_field = "as_3m_prank"
+                sortino_field = "sortino_as_3m_prank"
+            elif tf_label == "6m":
+                as_field = "as_6m_prank"
+                sortino_field = "sortino_as_6m_prank"
+            elif tf_label == "12m":
+                as_field = "as_12m_prank"
+                sortino_field = "sortino_as_12m_prank"
+            else:
+                continue
+
+            for sym, data in metrics_by_symbol.items():
+                data[as_field] = abs_pranks.get(sym)
+                data[sortino_field] = sortino_pranks.get(sym)
+
+        # --- Insert into metrics table ---
+
+        metrics_conn.execute("BEGIN;")
+
+        for data in metrics_by_symbol.values():
+            mdds = data["mdds"]
             metrics_cur.execute(
                 """
                 INSERT OR REPLACE INTO metrics (
@@ -229,39 +421,58 @@ def main() -> None:
                     ma50_slope,
                     ma200_slope,
                     dist_52w_high,
-                    dist_52w_low
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+                    dist_52w_low,
+                    mdd_1w,
+                    mdd_1m,
+                    mdd_3m,
+                    mdd_6m,
+                    mdd_12m,
+                    as_1w_prank,
+                    as_1m_prank,
+                    as_3m_prank,
+                    as_6m_prank,
+                    as_12m_prank,
+                    sortino_as_1w_prank,
+                    sortino_as_1m_prank,
+                    sortino_as_3m_prank,
+                    sortino_as_6m_prank,
+                    sortino_as_12m_prank
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
                 """,
                 (
-                    symbol,
-                    latest_date,
-                    daily_return,
-                    return_5d,
-                    return_21d,
-                    return_63d,
-                    return_ytd,
-                    ma10_slope,
-                    ma20_slope,
-                    ma50_slope,
-                    ma200_slope,
-                    dist_52w_high,
-                    dist_52w_low,
+                    data["symbol"],
+                    data["date"],
+                    data["daily_return"],
+                    data["return_5d"],
+                    data["return_21d"],
+                    data["return_63d"],
+                    data["return_ytd"],
+                    data["ma10_slope"],
+                    data["ma20_slope"],
+                    data["ma50_slope"],
+                    data["ma200_slope"],
+                    data["dist_52w_high"],
+                    data["dist_52w_low"],
+                    mdds["1w"],
+                    mdds["1m"],
+                    mdds["3m"],
+                    mdds["6m"],
+                    mdds["12m"],
+                    data["as_1w_prank"],
+                    data["as_1m_prank"],
+                    data["as_3m_prank"],
+                    data["as_6m_prank"],
+                    data["as_12m_prank"],
+                    data["sortino_as_1w_prank"],
+                    data["sortino_as_1m_prank"],
+                    data["sortino_as_3m_prank"],
+                    data["sortino_as_6m_prank"],
+                    data["sortino_as_12m_prank"],
                 ),
             )
 
-            # --- Simple progress output ---
-            if idx == 1 or idx == total_symbols or idx % 100 == 0:
-                percent = idx / total_symbols * 100
-                print(
-                    f"[INFO] Progress: {idx} / {total_symbols} ({percent:.1f}%)",
-                    end="\r",
-                    flush=True,
-                )
-
-        # Commit all inserts
         metrics_conn.commit()
-        print()  # newline after progress
-        print(f"[INFO] Done. Metrics rows for {latest_date}: {total_symbols}")
+        print(f"[INFO] Done. Metrics rows for {latest_date}: {len(metrics_by_symbol)}")
 
     finally:
         prices_conn.close()

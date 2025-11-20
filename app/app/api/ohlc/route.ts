@@ -4,7 +4,7 @@ import { getStocksDb } from '@/lib/db-stocks';
 export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const ticker = url.searchParams.get('ticker')?.toUpperCase();
-  const days = Number(url.searchParams.get('days') ?? 180);
+  const days = Number(url.searchParams.get('days') ?? 360);
 
   if (!ticker) {
     return NextResponse.json({ error: 'Missing ticker' }, { status: 400 });

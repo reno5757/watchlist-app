@@ -7,16 +7,22 @@ import { useTheme } from 'next-themes';
 import CommentBox from './comment-box';
 import { BarSeries, LineSeries } from 'lightweight-charts';
 
-type EmaLine = {
+import { AbsoluteStrengthBadgesForTicker } from '@/components/AbsoluteStrengthBadgesForTicker';
+import { VolAdjustedAbsoluteStrengthBadgesForTicker} from '@/components/VolAdjustedAbsoluteStrengthBadgesForTicker';
+
+type MovingAverageType = 'ema' | 'sma';
+
+type MaLine = {
   id: string;
+  type: MovingAverageType;
   length: number;
   color: string;
   visible: boolean;
 };
 
-type EmaConfig = {
-  emas_enabled: boolean;
-  lines: EmaLine[];
+type MaConfig = {
+  ma_enabled: boolean;
+  lines: MaLine[];
 };
 
 type Props = {
@@ -26,11 +32,13 @@ type Props = {
   height?: number; // px
   showTitle?: boolean;
 
-  // ⬇⬇⬇ EMAs: global chart EMA config
-  emaConfig?: EmaConfig;
+  // Global chart MA config (EMA/SMA)
+  maConfig?: MaConfig;
 };
 
-// ⬇⬇⬇ EMAs: simple EMA calculation on close prices
+const FETCH_DAYS = 1000;
+
+// ⬇⬇⬇ EMA calculation on close prices
 function computeEMA(
   points: Array<{ time: any; close: number }>,
   length: number
@@ -53,13 +61,52 @@ function computeEMA(
   return result;
 }
 
+// ⬇⬇⬇ SMA calculation on close prices
+function computeSMA(
+  points: Array<{ time: any; close: number }>,
+  length: number
+): Array<{ time: any; value: number }> {
+  if (!length || length <= 0 || points.length === 0) return [];
+
+  const result: Array<{ time: any; value: number }> = [];
+  let sum = 0;
+  const window: number[] = [];
+
+  for (let i = 0; i < points.length; i++) {
+    const p = points[i];
+    sum += p.close;
+    window.push(p.close);
+
+    if (window.length > length) {
+      sum -= window.shift()!;
+    }
+
+    if (window.length === length) {
+      const avg = sum / length;
+      result.push({ time: p.time, value: avg });
+    }
+  }
+
+  return result;
+}
+
+// Generic MA dispatcher
+function computeMA(
+  points: Array<{ time: any; close: number }>,
+  length: number,
+  type: MovingAverageType
+): Array<{ time: any; value: number }> {
+  if (type === 'sma') return computeSMA(points, length);
+  return computeEMA(points, length); // default / ema
+}
+
 export default function ChartTile({
   ticker,
   watchlistItemId,
   days = 180,
   height = 240,
   showTitle = true,
-  emaConfig, // ⬅ EMAs
+  maConfig, // now MaConfig internally
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<any>(null);
@@ -69,15 +116,15 @@ export default function ChartTile({
 
   const [chartReady, setChartReady] = useState(false);
 
-  // ⬇⬇⬇ EMAs: keep references to EMA line series by id
-  const emaSeriesRef = useRef<Record<string, any>>({});
+  // ⬇⬇⬇ MAs: keep references to MA line series by id
+  const maSeriesRef = useRef<Record<string, any>>({});
 
-  // OHLC fetch
+  // OHLC fetch – always FETCH_DAYS, independent of selected window
   const { data } = useQuery({
-    queryKey: ['ohlc', ticker, days],
+    queryKey: ['ohlc', ticker], // days does NOT affect fetch now
     queryFn: async () => {
       const res = await fetch(
-        `/api/ohlc?ticker=${encodeURIComponent(ticker)}&days=${days}`,
+        `/api/ohlc?ticker=${encodeURIComponent(ticker)}&days=${FETCH_DAYS}`,
         { cache: 'no-store' }
       );
       if (!res.ok) throw new Error('Failed to fetch OHLC');
@@ -114,7 +161,6 @@ export default function ChartTile({
     const init = async () => {
       if (!containerRef.current || chartRef.current) return;
 
-      // wait until container has width & height
       const ensureSize = () => {
         const w = Math.floor(containerRef.current!.clientWidth);
         const h = Math.floor(containerRef.current!.clientHeight || height);
@@ -129,7 +175,9 @@ export default function ChartTile({
         if (h <= 0) h = height;
       }
 
-      const { createChart, BarSeries, LineSeries } = await import('lightweight-charts');
+      const { createChart, BarSeries, LineSeries } = await import(
+        'lightweight-charts'
+      );
 
       if (cancelled || !containerRef.current) return;
 
@@ -141,7 +189,7 @@ export default function ChartTile({
         timeScale: {
           borderVisible: false,
           timeVisible: false,
-          rightOffsetPixels: 25,
+          rightOffsetPixels: 0,
         },
         grid: {
           vertLines: { color: colors.grid, style: 1 },
@@ -160,12 +208,11 @@ export default function ChartTile({
 
       setChartReady(true);
 
-      // keep chart width in sync
       const ro = new ResizeObserver((entries) => {
         for (const e of entries) {
           const newW = Math.max(100, Math.floor(e.contentRect.width));
           chart.applyOptions({ width: newW });
-          chart.timeScale().fitContent();
+          // chart.timeScale().fitContent();
         }
       });
       ro.observe(containerRef.current);
@@ -179,8 +226,8 @@ export default function ChartTile({
       roRef.current?.disconnect();
       roRef.current = null;
 
-      // ⬇⬇⬇ EMAs: clear EMA series handles on unmount
-      emaSeriesRef.current = {};
+      // Clear MA series handles on unmount
+      maSeriesRef.current = {};
 
       if (chartRef.current) {
         chartRef.current.remove?.();
@@ -211,9 +258,11 @@ export default function ChartTile({
     });
   }, [colors]);
 
-  // Set OHLC data
+  // Set OHLC data (full 450d) and set visible time window according to `days`
   useEffect(() => {
-    if (!chartReady || !data?.data || !seriesRef.current) return;
+    if (!chartReady || !data?.data || !seriesRef.current || !chartRef.current) {
+      return;
+    }
 
     const formatted = data.data
       .filter(
@@ -232,27 +281,36 @@ export default function ChartTile({
         return p;
       });
 
-    if (formatted.length > 0) {
-      seriesRef.current.setData(formatted as any);
-      chartRef.current?.timeScale().fitContent();
-    }
-  }, [data, chartReady]);
+    if (formatted.length === 0) return;
 
-  // ⬇⬇⬇ EMAs: compute & draw EMA line series
+    // Set full data for the bar series
+    seriesRef.current.setData(formatted as any);
+
+    // Set visible range based on `days`
+    const totalBars = formatted.length;
+    const barsToShow = Math.min(days, totalBars);
+    const fromIndex = Math.max(0, totalBars - barsToShow);
+    const toIndex = totalBars - 1;
+
+    chartRef.current.timeScale().setVisibleLogicalRange({ from: fromIndex, to: toIndex + Math.floor(days/15) });
+
+  }, [data, chartReady, days]);
+
+  // ⬇⬇⬇ MAs: compute & draw EMA / SMA line series (full data, same timeScale window)
   useEffect(() => {
     if (
       !chartReady ||
       !data?.data ||
       !chartRef.current ||
-      !emaConfig ||
-      !emaConfig.emas_enabled
+      !maConfig ||
+      !maConfig.ma_enabled
     ) {
-      // If EMAs are disabled, remove any existing EMA series
-      const existing = emaSeriesRef.current;
+      // If MAs are disabled, remove any existing MA series
+      const existing = maSeriesRef.current;
       for (const id of Object.keys(existing)) {
         chartRef.current?.removeSeries?.(existing[id]);
       }
-      emaSeriesRef.current = {};
+      maSeriesRef.current = {};
       return;
     }
 
@@ -277,23 +335,27 @@ export default function ChartTile({
       });
 
     if (raw.length === 0) {
-      const existing = emaSeriesRef.current;
+      const existing = maSeriesRef.current;
       for (const id of Object.keys(existing)) {
         chartRef.current?.removeSeries?.(existing[id]);
       }
-      emaSeriesRef.current = {};
+      maSeriesRef.current = {};
       return;
     }
 
     const visibleLines =
-      emaConfig.lines?.filter(
-        (l) => l.visible && typeof l.length === 'number' && l.length > 0
+      maConfig.lines?.filter(
+        (l) =>
+          l.visible &&
+          typeof l.length === 'number' &&
+          l.length > 0 &&
+          (l.type === 'ema' || l.type === 'sma')
       ) ?? [];
 
-    const existing = emaSeriesRef.current;
+    const existing = maSeriesRef.current;
     const activeIds = new Set(visibleLines.map((l) => l.id));
 
-    // Remove EMA series that are no longer active
+    // Remove MA series that are no longer active
     for (const id of Object.keys(existing)) {
       if (!activeIds.has(id)) {
         chartRef.current.removeSeries?.(existing[id]);
@@ -301,13 +363,13 @@ export default function ChartTile({
       }
     }
 
-    // Add / update series for each visible EMA
+    // Add / update series for each visible MA: full data
     for (const line of visibleLines) {
       let series = existing[line.id];
       if (!series) {
         series = chartRef.current.addSeries(LineSeries, {
           color: line.color,
-          lineWidth: 1,
+          lineWidth: 0.5,
           priceLineVisible: false,
           lastValueVisible: false,
         });
@@ -318,16 +380,20 @@ export default function ChartTile({
         });
       }
 
-      const emaData = computeEMA(raw, line.length);
-      series.setData(emaData as any);
+      const maData = computeMA(raw, line.length, line.type);
+      series.setData(maData as any);
     }
-  }, [data, chartReady, emaConfig]);
+  }, [data, chartReady, maConfig]);
 
-  // ⬇⬇⬇ EMAs: visible EMA lines for title display
-  const visibleEmaLines: EmaLine[] =
-    emaConfig && emaConfig.emas_enabled && Array.isArray(emaConfig.lines)
-      ? emaConfig.lines.filter(
-          (l) => l.visible && typeof l.length === 'number' && l.length > 0
+  // ⬇⬇⬇ Visible MA lines for title display
+  const visibleMaLines: MaLine[] =
+    maConfig && maConfig.ma_enabled && Array.isArray(maConfig.lines)
+      ? maConfig.lines.filter(
+          (l) =>
+            l.visible &&
+            typeof l.length === 'number' &&
+            l.length > 0 &&
+            (l.type === 'ema' || l.type === 'sma')
         )
       : [];
 
@@ -336,7 +402,7 @@ export default function ChartTile({
       {showTitle && (
         <div className="mb-1 text-sm font-semibold">
           <span>{ticker}</span>
-          {visibleEmaLines.length > 0 && (
+          {visibleMaLines.length > 0 && (
             <span
               style={{
                 marginLeft: 8,
@@ -344,21 +410,23 @@ export default function ChartTile({
                 fontWeight: 400,
               }}
             >
-              {visibleEmaLines.map((line, idx) => (
-                <span
-                  key={line.id}
-                  style={{ color: line.color }}
-                >
+              {visibleMaLines.map((line, idx) => (
+                <span key={line.id} style={{ color: line.color }}>
                   {idx > 0 && ' · '}
-                  EMA {line.length}
+                  {line.type.toUpperCase()} {line.length}
                 </span>
               ))}
             </span>
           )}
         </div>
       )}
-      {/* ensure container has explicit height so it’s never 0 */}
       <div ref={containerRef} style={{ width: '100%', height }} />
+      
+      {/* Include AS badges here */}
+        <div className="mt-2">
+          <AbsoluteStrengthBadgesForTicker ticker={ticker} />
+          <VolAdjustedAbsoluteStrengthBadgesForTicker ticker={ticker} />
+        </div>
       <div className="mt-2">
         <CommentBox watchlistItemId={watchlistItemId} />
       </div>
