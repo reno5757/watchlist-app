@@ -68,10 +68,11 @@ export default function WatchlistPerformance({ watchlist }: Props) {
     const dark = theme === 'dark' || theme === 'system';
     return {
       bg: 'transparent',
-      text: dark ? '#e5e7eb' : '#282829ff',
-      grid: dark ? '#282829ff' : '#e5e7eb',
+      text: !dark ? '#e5e7eb' : '#282829ff',
+      grid: !dark ? '#282829ff' : '#e5e7eb',
     };
   }, [theme]);
+
 
   const tickers = useMemo(
     () => Array.from(new Set(watchlist.items.map((it) => it.ticker.toUpperCase()))),

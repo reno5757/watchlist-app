@@ -1,18 +1,26 @@
+import type { Metadata } from 'next';
 import './globals.css';
-import DataClient from '@/components/data-client';
+import Sidebar from '@/components/sidebar';
+import { Providers } from './providers';
 
-export const metadata = { title: 'Local Watchlists', description: 'Local-first stocks UI' };
+export const metadata: Metadata = {title: 'Trading Dashboard',description: 'Trading Dashboard',};
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default function RootLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   return (
-    <html lang="en" suppressHydrationWarning>
-      <body className="min-h-screen bg-background text-foreground">
-        <div className="mx-auto p-4">
-          <header className="mb-6">
-            <h1 className="text-2xl font-bold">Watchlists App</h1>
-          </header>
-          <DataClient>{children}</DataClient>
-        </div>
+    <html lang="en" className="dark">
+      <body className="min-h-screen">
+        <Providers>
+          <div className="flex min-h-screen">
+            <Sidebar />
+            <main className="flex-1 p-6">
+              {children}
+            </main>
+          </div>
+        </Providers>
       </body>
     </html>
   );

@@ -10,10 +10,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+
 import type {
   WatchlistPayload,
   WatchlistItemRow,
-} from '@/app/watchlist/[id]/page';
+} from '@/lib/watching-sorting';
 
 // ==== Updated types: EMA + SMA support ====
 
@@ -204,7 +205,7 @@ export default function WatchlistChartTab({ watchlist }: Props) {
               ticker={it.ticker}
               watchlistItemId={it.item_id}
               days={days}
-              height={240}
+              height={400}
               maConfig={maConfig} // now MaConfig, handled in ChartTile,
             />
           ))}
@@ -239,7 +240,7 @@ export default function WatchlistChartTab({ watchlist }: Props) {
                     ticker={it.ticker}
                     watchlistItemId={it.item_id}
                     days={days}
-                    height={240}
+                    height={400}
                     maConfig={maConfig}
                   />
                 ))}

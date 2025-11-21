@@ -176,6 +176,8 @@ export default function WatchlistDrawdownVsReturnChart({ watchlistId }: { watchl
             },
           },
         },
+        datalabels: {display: false,},
+
       },
       scales: {
         x: {

@@ -104,7 +104,7 @@ export default function ChartTile({
   ticker,
   watchlistItemId,
   days = 180,
-  height = 240,
+  height = 400,
   showTitle = true,
   maConfig, // now MaConfig internally
 }: Props) {
@@ -145,11 +145,11 @@ export default function ChartTile({
     const dark = theme === 'dark' || theme === 'system';
     return {
       bg: 'transparent',
-      text: dark ? '#e5e7eb' : '#282829ff',
-      grid: dark ? '#282829ff' : '#e5e7eb',
+      text: !dark ? '#e5e7eb' : '#282829ff',
+      grid: !dark ? '#282829ff' : '#e5e7eb',
       up: '#ffffff', // white bars
       down: '#ffffff', // white bars
-      wick: dark ? '#9ca3af' : '#6b7280',
+      wick: !dark ? '#9ca3af' : '#6b7280',
     };
   }, [theme]);
 
@@ -422,7 +422,7 @@ export default function ChartTile({
       )}
       <div ref={containerRef} style={{ width: '100%', height }} />
       
-      {/* Include AS badges here */}
+      {/* AS badges */}
         <div className="mt-2">
           <AbsoluteStrengthBadgesForTicker ticker={ticker} />
           <VolAdjustedAbsoluteStrengthBadgesForTicker ticker={ticker} />

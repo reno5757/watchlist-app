@@ -1,3 +1,4 @@
+// app/api/watchlists/route.ts
 import { NextResponse } from 'next/server';
 import { getAppDb } from '@/lib/db-app';
 
@@ -8,6 +9,7 @@ export async function GET() {
     FROM watchlists
     ORDER BY id ASC
   `).all();
+
   return NextResponse.json(rows);
 }
 
@@ -15,34 +17,50 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
 
-    const title = (body.title ?? '').trim();
-    const intro = (body.intro ?? '').trim() || null;
-    const defaultSort = (body.defaultSort ?? '').trim() || null;
-    const groupBySubcategory = body.groupBySubcategory ? 1 : 0;
-
-    if (!title) {
+    const rawTitle =
+      typeof body.title === 'string' ? body.title.trim() : '';
+    if (!rawTitle) {
       return NextResponse.json(
         { error: 'Title is required' },
         { status: 400 }
       );
     }
 
-    const db = getAppDb();
+    const rawIntro =
+      typeof body.intro === 'string' ? body.intro.trim() : '';
+    const intro = rawIntro || null;
 
+    let defaultSort: string | null = null;
+    if (typeof body.default_sort === 'string') {
+      const trimmed = body.default_sort.trim();
+      defaultSort = trimmed !== '' ? trimmed : null;
+    }
+
+    let groupBy = 0;
+    if (typeof body.group_by_subcategory === 'boolean') {
+      groupBy = body.group_by_subcategory ? 1 : 0;
+    } else if (
+      body.group_by_subcategory === 0 ||
+      body.group_by_subcategory === 1
+    ) {
+      groupBy = body.group_by_subcategory;
+    }
+
+    const db = getAppDb();
     const stmt = db.prepare(
       `INSERT INTO watchlists (title, intro, default_sort, group_by_subcategory)
        VALUES (?, ?, ?, ?)`
     );
 
-    const result = stmt.run(title, intro, defaultSort, groupBySubcategory);
+    const result = stmt.run(rawTitle, intro, defaultSort, groupBy);
 
     return NextResponse.json(
       {
         id: result.lastInsertRowid,
-        title,
+        title: rawTitle,
         intro,
         default_sort: defaultSort,
-        group_by_subcategory: groupBySubcategory,
+        group_by_subcategory: groupBy,
       },
       { status: 201 }
     );
