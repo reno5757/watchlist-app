@@ -60,7 +60,7 @@ export default async function BreadthPage() {
       </header>
 
       <BreadthTable title="Indexes" data={indexes} />
-      <BreadthTable title="Sectors (via lists)" data={sectors} />
+      <BreadthTable title="Sectors" data={sectors} />
       <BreadthTable title="Other lists" data={others} />
     </main>
   );
