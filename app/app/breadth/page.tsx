@@ -15,10 +15,10 @@ const LIST_CATEGORY = {
   'Real Estate': 'sector',
   'Utilities': 'sector',
   'All US Stocks': 'index',
-  'Dow Jones Stocks': 'index',
-  'Koyfin Russell 2000': 'index',
-  'Nasdaq 100 Stocks': 'index',
-  'Sp 500 Stocks': 'index',
+  'Dow Jones': 'index',
+  'Russell 2000': 'index',
+  'Nasdaq 100': 'index',
+  'Sp 500': 'index',
 };
 
 function splitByCategory(rows: Awaited<ReturnType<typeof getLatestBreadthForLists>>) {
