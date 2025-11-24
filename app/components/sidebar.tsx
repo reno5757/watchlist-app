@@ -11,7 +11,7 @@ function cn(...classes: (string | false | null | undefined)[]) {
 const navItems = [
   { label: 'Home', href: '/' },
   { label: 'Wachlists', href: '/watchlist' },
-  { label: 'Breadth', href: '/watchlist1' },
+  { label: 'Breadth', href: '/breadth' },
   { label: 'Market Indexes', href: '/watchlist2' },
   { label: 'Sectors', href: '/watchlist3' },
   { label: 'Themes', href: '/watchlist4' },
