@@ -36,6 +36,14 @@ type Props = {
   maConfig?: MaConfig;
 };
 
+type StockInfo = {
+  id: number;
+  ticker: string;
+  name?: string | null;
+  sector?: string | null;
+  industry?: string | null;
+};
+
 const FETCH_DAYS = 1000;
 
 // ⬇⬇⬇ EMA calculation on close prices
@@ -106,7 +114,7 @@ export default function ChartTile({
   days = 180,
   height = 400,
   showTitle = true,
-  maConfig, // now MaConfig internally
+  maConfig, 
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<any>(null);
@@ -137,6 +145,23 @@ export default function ChartTile({
           close: number;
         }>;
       }>;
+    },
+  });
+
+  // 🔹 Stock metadata: name, sector, industry
+  const {
+    data: stockInfo,
+    isLoading: stockLoading,
+    error: stockError,
+  } = useQuery<StockInfo>({
+    queryKey: ['stock-info', ticker],
+    queryFn: async () => {
+      // Adjust the URL if your route is different (e.g. /api/stocks-info/)
+      const res = await fetch(`/api/stocks/${encodeURIComponent(ticker)}`, {
+        cache: 'no-store',
+      });
+      if (!res.ok) throw new Error('Failed to fetch stock info');
+      return res.json();
     },
   });
 
@@ -292,8 +317,10 @@ export default function ChartTile({
     const fromIndex = Math.max(0, totalBars - barsToShow);
     const toIndex = totalBars - 1;
 
-    chartRef.current.timeScale().setVisibleLogicalRange({ from: fromIndex, to: toIndex + Math.floor(days/15) });
-
+    chartRef.current.timeScale().setVisibleLogicalRange({
+      from: fromIndex,
+      to: toIndex + Math.floor(days / 15),
+    });
   }, [data, chartReady, days]);
 
   // ⬇⬇⬇ MAs: compute & draw EMA / SMA line series (full data, same timeScale window)
@@ -418,18 +445,40 @@ export default function ChartTile({
               ))}
             </span>
           )}
+
+          {/* Name / sector / industry under the ticker */}
+          {stockInfo && !stockError && (
+            <div className="mt-0.5 text-[11px] font-normal text-muted-foreground">
+              {stockInfo.name && (
+                <div className="truncate">{stockInfo.name}</div>
+              )}
+              {(stockInfo.sector || stockInfo.industry) && (
+                <div className="truncate">
+                  {stockInfo.sector}
+                  {stockInfo.sector && stockInfo.industry && ' · '}
+                  {stockInfo.industry}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
+
       <div ref={containerRef} style={{ width: '100%', height }} />
-      
-      {/* AS badges */}
-        <div className="mt-2">
-          <AbsoluteStrengthBadgesForTicker ticker={ticker} />
-          <VolAdjustedAbsoluteStrengthBadgesForTicker ticker={ticker} />
-        </div>
-      <div className="mt-2">
-        <CommentBox watchlistItemId={watchlistItemId} />
-      </div>
+
+      {watchlistItemId !== undefined && (
+        <>
+          {/* AS badges */}
+          <div className="mt-2">
+            <AbsoluteStrengthBadgesForTicker ticker={ticker} />
+            <VolAdjustedAbsoluteStrengthBadgesForTicker ticker={ticker} />
+          </div>
+          {/* Comment Box */}
+          <div className="mt-2">
+            <CommentBox watchlistItemId={watchlistItemId} />
+          </div>
+        </>
+      )}
     </Card>
   );
 }

@@ -10,10 +10,10 @@ function cn(...classes: (string | false | null | undefined)[]) {
 
 const navItems = [
   { label: 'Home', href: '/' },
-  { label: 'Wachlists', href: '/watchlist' },
+  { label: 'Watchlists', href: '/watchlist' },
   { label: 'Breadth', href: '/breadth' },
-  { label: 'Market Indexes', href: '/watchlist2' },
-  { label: 'Sectors', href: '/watchlist3' },
+  { label: 'Market Indexes', href: '/indexes' },
+  { label: 'Sectors', href: '/watchlist/6' },
   { label: 'Themes', href: '/watchlist4' },
   { label: 'Settings', href: '/watchlist5' },
   

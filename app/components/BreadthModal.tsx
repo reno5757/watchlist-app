@@ -151,6 +151,7 @@ export function BreadthModal({ selected, onClose }: BreadthModalProps) {
           },
         },
       },
+    datalabels: {display: false,},
     },
     scales: {
       x: {

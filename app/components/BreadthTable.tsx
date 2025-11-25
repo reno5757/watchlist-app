@@ -392,6 +392,9 @@ export function BreadthTable({ title, data }: Props) {
                 const ma50Ratio = row.total ? (row.aboveMa50 / row.total) * 100 : 0;
                 const ma200Ratio = row.total ? (row.aboveMa200 / row.total) * 100 : 0;
 
+                const newHigh52wRatio= row.total ? (row.newHigh52w / row.total) * 100 : 0;
+                const newLow52wRatio= row.total ? (row.newLow52w / row.total) * 100 : 0;
+                
                 const spikeUpRatio = row.total ? (row.spikeUp / row.total) * 100 : 0;
                 const spikeDownRatio = row.total
                   ? (row.spikeDown / row.total) * 100
@@ -467,11 +470,20 @@ export function BreadthTable({ title, data }: Props) {
 
                     {/* 52w high/low */}
                     <td className="w-24 px-2 py-1.5 text-right text-amber-200">
-                      {row.newHigh52w}
+                      <div className="flex flex-col items-end">
+                        <span>{row.newHigh52w}</span>
+                        <span className="text-[10px] text-zinc-500">
+                          {newHigh52wRatio.toFixed(1)}%
+                        </span>
+                      </div>
                     </td>
                     <td className="w-24 px-2 py-1.5 text-right text-sky-200">
-                      {row.newLow52w}
-                    </td>
+                      <div className="flex flex-col items-end">
+                        <span>{row.newLow52w}</span>
+                        <span className="text-[10px] text-zinc-500">
+                          {newLow52wRatio.toFixed(1)}%
+                        </span>
+                      </div>                    </td>
 
                     {/* MA cells -> metric modal */}
                     <td

@@ -86,41 +86,48 @@ export function BreadthAdModal({ selected, onClose }: BreadthAdModalProps) {
       ? series.slice(Math.max(0, totalPoints - clampedWindow))
       : null;
 
-  const chartData =
-    visibleSeries && visibleSeries.length > 0
-      ? {
-          labels: visibleSeries.map((p) => p.date),
-          datasets: [
-            {
-              label: 'Advances',
-              data: visibleSeries.map((p) => p.adv),
-              backgroundColor: 'rgba(34,197,94,0.7)', // emerald
-              borderWidth: 0,
-              type: 'bar' as const,
-              order: 2,
-            },
-            {
-              label: 'Declines',
-              data: visibleSeries.map((p) => -1 * p.dec), // plot declines below zero
-              backgroundColor: 'rgba(244,63,94,0.7)', // rose
-              borderWidth: 0,
-              type: 'bar' as const,
-              order: 2,
-            },
-            {
-              label: 'A-D',
-              data: visibleSeries.map((p) => p.adv - p.dec),
-              type: 'line' as const,
-              borderColor: 'rgba(129,140,248,1)', // indigo-ish
-              backgroundColor: 'rgba(129,140,248,0.15)',
-              borderWidth: 2,
-              pointRadius: 0,
-              tension: 0.25,
-              order: 1, // draw above bars
-            },
-          ],
-        }
-      : null;
+const chartData =
+  visibleSeries && visibleSeries.length > 0
+    ? {
+        labels: visibleSeries.map((p) => p.date),
+        datasets: [
+          {
+            label: 'Advances',
+            data: visibleSeries.map((p) => p.adv),
+            backgroundColor: 'rgba(34,197,94,0.7)', // emerald
+            borderWidth: 0,
+            type: 'bar' as const,
+            order: 2,
+            grouped: false,         // <--- add this
+            barPercentage: 0.8,     // optional: control width
+            categoryPercentage: 1.0 // optional
+          },
+          {
+            label: 'Declines',
+            data: visibleSeries.map((p) => -1 * p.dec),
+            backgroundColor: 'rgba(244,63,94,0.7)', // rose
+            borderWidth: 0,
+            type: 'bar' as const,
+            order: 2,
+            grouped: false,         // <--- add this
+            barPercentage: 0.8,
+            categoryPercentage: 1.0
+          },
+          {
+            label: 'A-D',
+            data: visibleSeries.map((p) => p.adv - p.dec),
+            type: 'line' as const,
+            borderColor: 'rgba(129,140,248,1)',
+            backgroundColor: 'rgba(129,140,248,0.15)',
+            borderWidth: 2,
+            pointRadius: 0,
+            tension: 0.25,
+            order: 1,
+          },
+        ],
+      }
+    : null;
+
 
   const chartOptions: Parameters<typeof Bar>[0]['options'] = {
     responsive: true,
@@ -156,6 +163,7 @@ export function BreadthAdModal({ selected, onClose }: BreadthAdModalProps) {
           },
         },
       },
+    datalabels: {display: false,},
     },
     scales: {
       x: {

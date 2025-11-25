@@ -200,6 +200,8 @@ export function McClellanModal({ selected, onClose }: McClellanModalProps) {
         titleColor: '#e4e4e7',
         bodyColor: '#e4e4e7',
       },
+      datalabels: {display: false,},
+
     },
     scales: {
       x: {
@@ -241,6 +243,8 @@ export function McClellanModal({ selected, onClose }: McClellanModalProps) {
         titleColor: '#e4e4e7',
         bodyColor: '#e4e4e7',
       },
+      datalabels: {display: false,},
+
     },
     scales: {
       x: {
