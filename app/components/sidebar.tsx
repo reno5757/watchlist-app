@@ -15,7 +15,7 @@ const navItems = [
   { label: 'Market Indexes', href: '/indexes' },
   { label: 'Sectors', href: '/watchlist/6' },
   { label: 'Themes', href: '/watchlist4' },
-  { label: 'Settings', href: '/watchlist5' },
+  { label: 'Settings', href: '/settings' },
   
 ];
 

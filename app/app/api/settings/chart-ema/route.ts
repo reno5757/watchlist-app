@@ -1,3 +1,4 @@
+// app/api/chart-ma-config/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { getAppDb } from '@/lib/db-app';
 
@@ -119,6 +120,30 @@ export async function GET(_req: NextRequest) {
     }
   }
 
-  // NOTE: frontend now receives: { ma_enabled, lines: [{ id, type, length, color, visible }] }
+  // frontend receives: { ma_enabled, lines: [{ id, type, length, color, visible }] }
+  return NextResponse.json(config);
+}
+
+export async function PUT(req: NextRequest) {
+  let body: unknown;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+
+  // Reuse the same normalization / fallback logic as GET:
+  // stringify the body and feed it through parseConfig.
+  const config = parseConfig(JSON.stringify(body));
+
+  const db = getAppDb();
+  db.prepare(
+    `
+    INSERT INTO app_settings (key, value)
+    VALUES (?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+  `
+  ).run(SETTINGS_KEY, JSON.stringify(config));
+
   return NextResponse.json(config);
 }
