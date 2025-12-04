@@ -8,15 +8,26 @@ function cn(...classes: (string | false | null | undefined)[]) {
   return classes.filter(Boolean).join(' ');
 }
 
-const navItems = [
+type NavItem = {
+  label: string;
+  href: string;
+  children?: NavItem[];
+};
+
+const navItems: NavItem[] = [
   { label: 'Home', href: '/' },
-  { label: 'Watchlists', href: '/watchlist' },
+  {
+    label: 'Watchlists',
+    href: "null",
+    children: [
+      { label: 'Lists', href: '/watchlist' },
+      { label: 'Sectors', href: '/watchlist/6' },
+      { label: 'Themes', href: '/watchlist/7' },
+    ],
+  },
   { label: 'Breadth', href: '/breadth' },
   { label: 'Market Indexes', href: '/indexes' },
-  { label: 'Sectors', href: '/watchlist/6' },
-  { label: 'Themes', href: '/watchlist4' },
   { label: 'Settings', href: '/settings' },
-  
 ];
 
 export default function Sidebar() {
@@ -29,16 +40,45 @@ export default function Sidebar() {
           item.href === '/' ? pathname === '/' : pathname.startsWith(item.href);
 
         return (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={cn(
-              'block rounded-lg px-3 py-2 text-sm font-medium hover:bg-accent',
-              isActive && 'bg-accent'
+          <div key={item.href}>
+            {/* Main item */}
+            {item.href != "null" ? (
+              <Link
+                href={item.href}
+                className={cn(
+                  'block rounded-lg px-3 py-2 text-sm font-medium hover:bg-accent',
+                  isActive && 'bg-accent'
+                )}
+              >
+                {item.label}
+              </Link>
+            ) : (
+              <div className="px-3 py-2 text-sm font-semibold text-zinc-300">
+                {item.label}
+              </div>
             )}
-          >
-            {item.label}
-          </Link>
+            {/* Children */}
+            {item.children && (
+              <div className="ml-4 mt-1 space-y-1">
+                {item.children.map((child) => {
+                  const childActive = pathname === child.href;
+
+                  return (
+                    <Link
+                      key={child.href}
+                      href={child.href}
+                      className={cn(
+                        'block rounded-md px-3 py-1 text-sm hover:bg-accent/50',
+                        childActive && 'bg-accent'
+                      )}
+                    >
+                      {child.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         );
       })}
     </aside>

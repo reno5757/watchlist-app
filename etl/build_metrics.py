@@ -315,6 +315,9 @@ def main() -> None:
                         sortino_tf = ret_tf / mdd_tf
                     else:
                         sortino_tf = None
+                    
+                    if mdd_tf == 0:
+                        sortino_tf= ret_tf /0.001
 
                     sortino_vals[tf_label] = sortino_tf
                 else:
