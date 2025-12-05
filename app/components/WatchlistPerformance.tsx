@@ -2,14 +2,18 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { createChart, IChartApi, ISeriesApi, LineData, LineSeries } from 'lightweight-charts';
+import {
+  createChart,
+  IChartApi,
+  ISeriesApi,
+  LineData,
+  LineSeries,
+} from 'lightweight-charts';
 import { useTheme } from 'next-themes';
 import { Card } from '@/components/ui/card';
-
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-
 import type { WatchlistPayload } from '@/app/watchlist/[id]/page';
 
 function colorForIndex(i: number, total: number) {
@@ -28,6 +32,7 @@ type OhlcRow = {
   low: number;
   close: number;
 };
+
 type OhlcResponse = {
   ticker: string;
   days: number;
@@ -43,11 +48,16 @@ type PerformanceQueryResult = {
   series: PerformanceSeries[];
 };
 
-const COLOR_PALETTE = [
-  '#4ade80', '#60a5fa', '#f97316',
-  '#a855f7', '#facc15', '#f87171',
-  '#2dd4bf', '#fb7185',
-];
+type StockInfo = {
+  symbol: string;
+  name?: string;
+};
+
+type LegendEntry = {
+  ticker: string;
+  name?: string;
+  color: string;
+};
 
 const PRESETS = [
   { label: '1m', value: 30 },
@@ -64,21 +74,23 @@ export default function WatchlistPerformance({ watchlist }: Props) {
   const seriesMapRef = useRef<Record<string, ISeriesApi<'Line'>>>({});
   const { theme } = useTheme();
 
-  const colors = useMemo(() => {
-    const dark = theme === 'dark' || theme === 'system';
-    return {
-      bg: 'transparent',
-      text: !dark ? '#e5e7eb' : '#282829ff',
-      grid: !dark ? '#282829ff' : '#e5e7eb',
-    };
-  }, [theme]);
-
+const colors = useMemo(() => {
+  const dark = theme === 'dark' || theme === 'system';
+  return {
+    bg: 'transparent',
+    text: !dark ? '#e5e7eb' : '#282829ff',
+    grid: dark ? 'rgba(128,128,128,0.3)' : 'rgba(128,128,128,0.3)'
+  };
+}, [theme]);
 
   const tickers = useMemo(
     () => Array.from(new Set(watchlist.items.map((it) => it.ticker.toUpperCase()))),
     [watchlist.items]
   );
 
+  /* -------------------------------------------------------
+     1) PERFORMANCE DATA
+  ------------------------------------------------------- */
   const { data, isLoading, error } = useQuery<PerformanceQueryResult>({
     queryKey: ['watchlist-performance', watchlist.id, days],
     enabled: tickers.length > 0,
@@ -99,7 +111,7 @@ export default function WatchlistPerformance({ watchlist }: Props) {
       for (const resp of responses) {
         if (!resp.data?.length) continue;
 
-        const base = resp.data[0].close || resp.data[0].open;
+        const base = resp.data[0].close ?? resp.data[0].open;
         if (!base || base <= 0) continue;
 
         const points = resp.data.map((row) => ({
@@ -114,7 +126,54 @@ export default function WatchlistPerformance({ watchlist }: Props) {
     },
   });
 
-  // 👇 FIXED: chart init + proper cleanup of seriesMapRef
+  /* -------------------------------------------------------
+     2) COMPANY NAMES FOR LEGEND
+  ------------------------------------------------------- */
+  const { data: namesMap } = useQuery<Record<string, string | undefined>>({
+    queryKey: ['stock-names-for-performance', tickers],
+    enabled: tickers.length > 0,
+    queryFn: async () => {
+      const infos = await Promise.all(
+        tickers.map(async (ticker) => {
+          try {
+            const r = await fetch(`/api/stocks/${ticker}`, { cache: 'no-store' });
+            if (!r.ok) return { ticker, name: undefined };
+
+            const info = (await r.json()) as StockInfo;
+
+            const name =
+              info.name ??
+              undefined;
+
+            return { ticker, name };
+          } catch {
+            return { ticker, name: undefined };
+          }
+        })
+      );
+
+      const out: Record<string, string | undefined> = {};
+      infos.forEach((inf) => (out[inf.ticker] = inf.name));
+      return out;
+    },
+  });
+
+  /* -------------------------------------------------------
+     3) LEGEND ENTRIES
+  ------------------------------------------------------- */
+  const legendEntries: LegendEntry[] = useMemo(() => {
+    if (!data) return [];
+
+    return data.series.map((serie, idx) => {
+      const color = colorForIndex(idx, data.series.length);
+      const name = namesMap?.[serie.ticker];
+      return { ticker: serie.ticker, name, color };
+    });
+  }, [data, namesMap]);
+
+  /* -------------------------------------------------------
+     4) INITIALIZE CHART
+  ------------------------------------------------------- */
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -122,48 +181,47 @@ export default function WatchlistPerformance({ watchlist }: Props) {
       height: 420,
       layout: { background: { color: colors.bg }, textColor: colors.text },
       rightPriceScale: { borderVisible: false },
-      timeScale: { borderVisible: false, timeVisible: false, rightOffsetPixels: 50 },
+      timeScale: { borderVisible: false, timeVisible: false, rightOffsetPixels: 40 },
       grid: {
         vertLines: { color: colors.grid },
         horzLines: { color: colors.grid },
       },
-      crosshair: { mode: 0 },
     });
 
     chartRef.current = chart;
-    // 🔑 start with a fresh series map for this chart instance
     seriesMapRef.current = {};
 
-    const resizeObserver = new ResizeObserver((entries) => {
-      const width = entries[0].contentRect.width;
-      chart.applyOptions({ width });
+    const obs = new ResizeObserver(([e]) => {
+      chart.applyOptions({ width: e.contentRect.width });
     });
-    resizeObserver.observe(containerRef.current);
+
+    obs.observe(containerRef.current);
 
     return () => {
-      resizeObserver.disconnect();
+      obs.disconnect();
       chart.remove();
       chartRef.current = null;
-      // 🔑 clear the map so we don't reuse dead series on next mount
       seriesMapRef.current = {};
     };
   }, [colors]);
 
+  /* -------------------------------------------------------
+     5) UPDATE SERIES
+  ------------------------------------------------------- */
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart || !data) return;
 
     const existing = seriesMapRef.current;
-    const seen = new Set<string>();
+    const present = new Set<string>();
 
     data.series.forEach((serie, idx) => {
-      seen.add(serie.ticker);
+      present.add(serie.ticker);
 
       let s = existing[serie.ticker];
       if (!s) {
         const color = colorForIndex(idx, data.series.length);
         s = chart.addSeries(LineSeries, {
-          title: serie.ticker,
           color,
           lineWidth: 2,
           priceFormat: { type: 'percent', precision: 2 },
@@ -176,7 +234,7 @@ export default function WatchlistPerformance({ watchlist }: Props) {
     });
 
     Object.keys(existing).forEach((ticker) => {
-      if (!seen.has(ticker)) {
+      if (!present.has(ticker)) {
         chart.removeSeries(existing[ticker]);
         delete existing[ticker];
       }
@@ -185,15 +243,16 @@ export default function WatchlistPerformance({ watchlist }: Props) {
     chart.timeScale().fitContent();
   }, [data]);
 
+  /* -------------------------------------------------------
+     6) UI
+  ------------------------------------------------------- */
   return (
     <div className="space-y-4">
       {/* === Controls === */}
       <div className="flex items-start flex-col gap-3">
         <div className="flex items-center justify-between w-80">
           <Label className="text-sm text-muted-foreground">Window</Label>
-          <span className="text-xs text-muted-foreground tabular-nums">
-            {days} days
-          </span>
+          <span className="text-xs text-muted-foreground tabular-nums">{days} days</span>
         </div>
 
         <Slider
@@ -227,8 +286,51 @@ export default function WatchlistPerformance({ watchlist }: Props) {
 
       {/* === Chart === */}
       <Card className="p-2">
-        <div className="mb-1 text-sm text-center font-semibold"> Performance Chart - {days} days </div>
+        <div className="text-sm text-center font-semibold mb-2">
+          Performance Chart — {days} days
+        </div>
+
         <div ref={containerRef} className="h-[420px] w-full" />
+
+        {/* === LEGEND === */}
+        {legendEntries.length > 0 && (
+          <div className="mt-4 pt-3 border-t border-zinc-700">
+            <div className="text-sm font-semibold mb-2">Legend</div>
+
+            <div className="flex flex-wrap gap-2">
+              {legendEntries.map((entry) => (
+                <div
+                  key={entry.ticker}
+                  className="
+                    flex items-center gap-2
+                    px-3 py-1.5
+                    rounded-md
+                    bg-zinc-900/60
+                    border border-zinc-700
+                    hover:bg-zinc-800/60
+                    transition-colors
+                    text-xs
+                    cursor-default
+                  "
+                >
+                  <div
+                    className="w-3 h-3 rounded-sm border border-black/20"
+                    style={{ backgroundColor: entry.color }}
+                  />
+
+                  <span className="font-semibold text-zinc-200">
+                    {entry.ticker}
+                  </span>
+
+                  <span className=" text-zinc-400 max-w-[180px] truncate">
+                    {entry.name ?? '—'}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
       </Card>
     </div>
   );

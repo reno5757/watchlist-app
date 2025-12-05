@@ -34,9 +34,9 @@ ChartJS.register(
 
 type MetricsRow = {
   symbol: string;
+  name?: string;        // <-- added
   date: string;
 
-  // returns (fractions, e.g. 0.12 for +12%)
   daily_return: number | null;
   return_5d: number | null;
   return_21d: number | null;
@@ -44,19 +44,25 @@ type MetricsRow = {
   return_126d: number | null;
   return_252d: number | null;
 
-  // AS p-ranks
   as_1w_prank: number | null;
   as_1m_prank: number | null;
   as_3m_prank: number | null;
   as_6m_prank: number | null;
   as_12m_prank: number | null;
 
-  // Sortino-AS p-ranks
   sortino_as_1w_prank: number | null;
   sortino_as_1m_prank: number | null;
   sortino_as_3m_prank: number | null;
   sortino_as_6m_prank: number | null;
   sortino_as_12m_prank: number | null;
+};
+
+type StockInfo = {
+  symbol: string;
+  name?: string;
+  shortName?: string;
+  longName?: string;
+  companyName?: string;
 };
 
 type Props = {
@@ -67,7 +73,6 @@ function toNumber(v: number | null) {
   return v == null ? 0 : v;
 }
 
-// convert fractional return (0.12) to percent (12)
 function toPercent(v: number | null) {
   return v == null ? 0 : v * 100;
 }
@@ -77,30 +82,51 @@ export default function WatchlistRadar({ watchlist }: Props) {
   const symbolsOrder = watchlist.items.map((i) => i.ticker);
 
   const { data, isLoading, error } = useQuery<MetricsRow[]>({
-    queryKey: ['watchlist-metrics-radar', watchlistId],
+    queryKey: ['watchlist-metrics-radar-with-names', watchlistId],
     queryFn: async () => {
+      // Fetch metrics
       const res = await fetch(`/api/watchlists/${watchlistId}/metrics`, {
         cache: 'no-store',
       });
       if (!res.ok) throw new Error('Failed to load metrics');
-      return res.json();
+      const metrics: MetricsRow[] = await res.json();
+
+      // Fetch company name for each symbol
+      const infos = await Promise.all(
+        metrics.map(async (row) => {
+          try {
+            const r = await fetch(`/api/stocks/${row.symbol}`, {
+              cache: 'no-store',
+            });
+            if (!r.ok) return null;
+            return (await r.json()) as StockInfo;
+          } catch {
+            return null;
+          }
+        })
+      );
+
+      // Merge name into metrics
+      return metrics.map((row, i) => {
+        const info = infos[i];
+        const name =
+          info?.name ??
+          info?.shortName ??
+          info?.longName ??
+          info?.companyName ??
+          undefined;
+
+        return { ...row, name };
+      });
     },
   });
 
   if (isLoading) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        Loading radar charts…
-      </p>
-    );
+    return <p className="text-sm text-muted-foreground">Loading radar charts…</p>;
   }
 
   if (error || !data || data.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground">
-        No metrics available.
-      </p>
-    );
+    return <p className="text-sm text-muted-foreground">No metrics available.</p>;
   }
 
   // Apply watchlist ticker order
@@ -113,13 +139,13 @@ export default function WatchlistRadar({ watchlist }: Props) {
     return ia - ib;
   });
 
-  const labels = ['1W', '1M', '3M', '6M', '12M']; // for radar
-  const perfLabels = labels; // same buckets for the bar chart
+  const labels = ['1W', '1M', '3M', '6M', '12M'];
+  const perfLabels = labels;
 
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5">
       {rows.map((row) => {
-        // ----- Radar data (AS & Sortino-AS p-ranks) -----
+        // ----- Radar data -----
         const asData = [
           toNumber(row.as_1w_prank),
           toNumber(row.as_1m_prank),
@@ -142,16 +168,16 @@ export default function WatchlistRadar({ watchlist }: Props) {
             {
               label: 'Absolute AS',
               data: asData,
-              borderColor: 'rgba(59, 130, 246, 1)', // blue-500
-              backgroundColor: 'rgba(59, 130, 246, 0.2)',
+              borderColor: 'rgba(59,130,246,1)',
+              backgroundColor: 'rgba(59,130,246,0.25)',
               borderWidth: 2,
               pointRadius: 2,
             },
             {
               label: 'Vol-adjusted AS',
               data: sortinoData,
-              borderColor: 'rgba(16, 185, 129, 1)', // emerald-500
-              backgroundColor: 'rgba(16, 185, 129, 0.2)',
+              borderColor: 'rgba(16,185,129,1)',
+              backgroundColor: 'rgba(16,185,129,0.25)',
               borderWidth: 2,
               pointRadius: 2,
             },
@@ -165,50 +191,30 @@ export default function WatchlistRadar({ watchlist }: Props) {
             legend: {
               display: true,
               position: 'bottom',
-              labels: {
-                boxWidth: 10,
-                font: { size: 10 },
-              },
+              labels: { boxWidth: 10, font: { size: 10 } },
             },
             title: {
               display: true,
-              text: row.symbol,
+              text: row.name ? `${row.name}\n(${row.symbol})` : row.symbol,
               padding: { top: 0, bottom: 4 },
-              font: { size: 14 },
+              font: { size: 13 },
               color: '#ffffff',
             },
-            tooltip: {
-              callbacks: {
-                label: (ctx: any) => {
-                  const label = ctx.dataset.label || '';
-                  const value = ctx.parsed.r ?? 0;
-                  return `${label}: ${Math.round(value)}`;
-                },
-              },
-            },
-            datalabels: {display: false,},
+            datalabels: { display: false },
           },
           scales: {
             r: {
-              angleLines: { color: 'rgba(148, 163, 184, 0.3)' },
-              grid: { color: 'rgba(148, 163, 184, 0.2)' },
               min: 0,
               max: 100,
-              ticks: {
-                display: false,
-                stepSize: 20,
-                backdropColor: 'transparent',
-                font: { size: 9 },
-              },
-              pointLabels: {
-                font: { size: 10 },
-              },
+              ticks: { display: false },
+              grid: { color: 'rgba(148,163,184,0.2)' },
+              angleLines: { color: 'rgba(148,163,184,0.3)' },
+              pointLabels: { font: { size: 10 } },
             },
           },
-        
         } as const;
 
-        // ----- Horizontal bar data (performance in %) -----
+        // ----- Bar chart data -----
         const perfData = [
           toPercent(row.return_5d),
           toPercent(row.return_21d),
@@ -223,8 +229,8 @@ export default function WatchlistRadar({ watchlist }: Props) {
             {
               label: 'Performance (%)',
               data: perfData,
-              backgroundColor: 'rgba(59, 130, 246, 0.6)',
-              borderColor: 'rgba(59, 130, 246, 1)',
+              backgroundColor: 'rgba(59,130,246,0.6)',
+              borderColor: 'rgba(59,130,246,1)',
               borderWidth: 1,
               borderRadius: 4,
             },
@@ -237,42 +243,17 @@ export default function WatchlistRadar({ watchlist }: Props) {
           indexAxis: 'y' as const,
           plugins: {
             legend: { display: false },
-
-          datalabels: {
-            anchor: 'end',
-            align: 'right',
-            color: (ctx: any) => {
-              const v = ctx?.dataset?.data?.[ctx.dataIndex] ?? 0;
-              if (v > 0) return '#5969f8ff';   // green
-              if (v < 0) return '#ec5affff';   // red
-              return '#e5e7eb';              // neutral
-            },
-            font: { size: 10 },
-            formatter: (value: any) => `${Number(value).toFixed(1)}%`,
-            clamp: true,
-          },
-            tooltip: {
-              callbacks: {
-                label: (ctx: any) => {
-                  const label = ctx.label || '';
-                  const value = ctx.parsed.x ?? 0;
-                  return `${label}: ${value.toFixed(1)}%`;
-                },
-              },
+            datalabels: {
+              anchor: 'end',
+              align: 'right',
+              color: '#e5e7eb',
+              font: { size: 10 },
+              formatter: (v: number) => `${v.toFixed(1)}%`,
             },
           },
           scales: {
-            x: {
-              ticks: {
-                callback: (val: any) => `${val}%`,
-                font: { size: 9 },
-              },
-              grid: { color: 'rgba(148, 163, 184, 0.15)' },
-            },
-            y: {
-              ticks: { font: { size: 9 } },
-              grid: { display: false },
-            },
+            x: { ticks: { callback: (v: any) => `${v}%` } },
+            y: { grid: { display: false } },
           },
         };
 

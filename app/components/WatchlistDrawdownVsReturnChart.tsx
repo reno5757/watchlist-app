@@ -31,7 +31,7 @@ import {
 ChartJS.register(LinearScale, PointElement, Tooltip, Legend, Title);
 
 /* -----------------------------
-   Custom plugin to draw tickers
+   Ticker label plugin
 -------------------------------- */
 const TickerLabelPlugin = {
   id: 'tickerLabels',
@@ -46,7 +46,7 @@ const TickerLabelPlugin = {
 
         ctx.save();
         ctx.font = '10px sans-serif';
-        ctx.fillStyle = 'rgb(59,130,246)';  // visible on dark mode
+        ctx.fillStyle = 'rgb(59,130,246)';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'bottom';
         ctx.fillText(raw.symbol, point.x, point.y - 6);
@@ -64,34 +64,49 @@ ChartJS.register(TickerLabelPlugin);
 
 type MetricsRow = {
   symbol: string;
+  name?: string;                 // <-- ADDED
   date: string;
+
   daily_return: number | null;
   return_5d: number | null;
   return_21d: number | null;
   return_63d: number | null;
   return_126d: number | null;
   return_252d: number | null;
+
   ma10_slope: number | null;
   ma20_slope: number | null;
   ma50_slope: number | null;
   ma200_slope: number | null;
+
   dist_52w_high: number | null;
   dist_52w_low: number | null;
+
   mdd_1w: number | null;
   mdd_1m: number | null;
   mdd_3m: number | null;
   mdd_6m: number | null;
   mdd_12m: number | null;
+
   as_1w_prank: number | null;
   as_1m_prank: number | null;
   as_3m_prank: number | null;
   as_6m_prank: number | null;
   as_12m_prank: number | null;
+
   sortino_as_1w_prank: number | null;
   sortino_as_1m_prank: number | null;
   sortino_as_3m_prank: number | null;
   sortino_as_6m_prank: number | null;
   sortino_as_12m_prank: number | null;
+};
+
+type StockInfo = {
+  symbol: string;
+  name?: string;
+  shortName?: string;
+  longName?: string;
+  companyName?: string;
 };
 
 type TimeframeKey = '1w' | '1m' | '3m' | '6m' | '12m';
@@ -112,11 +127,42 @@ export default function WatchlistDrawdownVsReturnChart({ watchlistId }: { watchl
   const [timeframe, setTimeframe] = useState<TimeframeKey>('3m');
 
   const { data, isLoading, error } = useQuery<MetricsRow[]>({
-    queryKey: ['watchlist-metrics', watchlistId],
+    queryKey: ['watchlist-metrics-with-names', watchlistId],
     queryFn: async () => {
-      const res = await fetch(`/api/watchlists/${watchlistId}/metrics`);
+      // fetch metrics
+      const res = await fetch(`/api/watchlists/${watchlistId}/metrics`, {
+        cache: 'no-store',
+      });
       if (!res.ok) throw new Error('Failed to fetch metrics');
-      return res.json();
+      const metrics: MetricsRow[] = await res.json();
+
+      // fetch company names
+      const infos = await Promise.all(
+        metrics.map(async (row) => {
+          try {
+            const r = await fetch(`/api/stocks/${row.symbol}`, {
+              cache: 'no-store',
+            });
+            if (!r.ok) return null;
+            return (await r.json()) as StockInfo;
+          } catch {
+            return null;
+          }
+        })
+      );
+
+      // merge names
+      return metrics.map((row, i) => {
+        const info = infos[i];
+        const name =
+          info?.name ??
+          info?.shortName ??
+          info?.longName ??
+          info?.companyName ??
+          undefined;
+
+        return { ...row, name };
+      });
     },
     staleTime: 60_000,
   });
@@ -138,21 +184,20 @@ export default function WatchlistDrawdownVsReturnChart({ watchlistId }: { watchl
           x: ret * 100,
           y: -mdd * 100,
           symbol: row.symbol,
+          name: row.name,     // <-- added for tooltip
         };
       })
       .filter(Boolean);
 
     return {
-      datasets: [
-        {
-          label: `${selectedConfig.label} return vs max drawdown`,
-          data: points,
-          pointRadius: 6,
-          pointBackgroundColor: 'rgb(59,130,246)',
-          pointBorderColor: 'rgb(30,58,138)',
-          pointBorderWidth: 2,
-        },
-      ],
+      datasets: [{
+        label: `${selectedConfig.label} return vs max drawdown`,
+        data: points,
+        pointRadius: 6,
+        pointBackgroundColor: 'rgb(59,130,246)',
+        pointBorderColor: 'rgb(30,58,138)',
+        pointBorderWidth: 2,
+      }],
     };
   }, [data, selectedConfig]);
 
@@ -161,9 +206,7 @@ export default function WatchlistDrawdownVsReturnChart({ watchlistId }: { watchl
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
-        legend: {
-          display: false,
-        },
+        legend: { display: false },
         title: {
           display: true,
           text: `${selectedConfig.label} – Return vs Max Drawdown`,
@@ -172,19 +215,25 @@ export default function WatchlistDrawdownVsReturnChart({ watchlistId }: { watchl
           callbacks: {
             label: (ctx: TooltipItem<'scatter'>) => {
               const raw = ctx.raw as any;
-              return `${raw.symbol}: Return ${raw.x.toFixed(2)}%, MaxDD ${raw.y.toFixed(2)}%`;
+              const title = raw.name
+                ? `${raw.symbol} – ${raw.name}`
+                : raw.symbol;
+
+              return `${title}: Return ${raw.x.toFixed(2)}%, MaxDD ${raw.y.toFixed(2)}%`;
             },
           },
         },
-        datalabels: {display: false,},
+        datalabels: { display: false },
 
       },
       scales: {
         x: {
           grid: {
             color: (ctx) =>
-              ctx.tick.value === 0 ? 'rgba(255, 255, 255, 0.9)' : 'rgba(128,128,128,0.3)',
-            lineWidth: (ctx) => (ctx.tick.value === 0 ? 1 : 1),
+              ctx.tick.value === 0
+                ? 'rgba(255, 255, 255, 0.9)'      // <-- white zero line
+                : 'rgba(128,128,128,0.3)',
+            lineWidth: (ctx) => (ctx.tick.value === 0 ? 1.2 : 1),
           },
           title: { display: true, text: 'Return (%)' },
           ticks: { callback: (v) => `${v}%` },
@@ -192,13 +241,16 @@ export default function WatchlistDrawdownVsReturnChart({ watchlistId }: { watchl
         y: {
           grid: {
             color: (ctx) =>
-              ctx.tick.value === 0 ? 'rgba(255, 255, 255, 0.9)' : 'rgba(128,128,128,0.3)',
-            lineWidth: (ctx) => (ctx.tick.value === 0 ? 1 : 1),
+              ctx.tick.value === 0
+                ? 'rgba(255,255,255,0.9)'         // <-- white zero line
+                : 'rgba(128,128,128,0.3)',
+            lineWidth: (ctx) => (ctx.tick.value === 0 ? 1.2 : 1),
           },
           title: { display: true, text: 'Max drawdown (%)' },
           ticks: { callback: (v) => `${v}%` },
         },
-      },
+      }
+
     }),
     [selectedConfig]
   );
@@ -210,13 +262,10 @@ export default function WatchlistDrawdownVsReturnChart({ watchlistId }: { watchl
   return (
     <Card className="w-full h-[450px] flex flex-col">
       <CardHeader className="relative pb-2">
-
-        {/* CENTERED TITLE */}
         <CardTitle className="absolute left-1/2 -translate-x-1/2 text-base">
           Return vs Max Drawdown
         </CardTitle>
 
-        {/* RIGHT-ALIGNED SELECT */}
         <div className="ml-auto">
           <Select value={timeframe} onValueChange={(v) => setTimeframe(v as TimeframeKey)}>
             <SelectTrigger className="h-8 w-[150px] text-xs">
@@ -232,6 +281,7 @@ export default function WatchlistDrawdownVsReturnChart({ watchlistId }: { watchl
           </Select>
         </div>
       </CardHeader>
+
       <CardContent className="flex-1">
         <Scatter data={chartData} options={options} />
       </CardContent>

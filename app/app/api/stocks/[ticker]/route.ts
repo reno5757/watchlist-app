@@ -13,7 +13,7 @@ export async function GET(req: Request, context: { params: Promise<{ ticker: str
     const db = getStocksListsDb();
 
     const stmt = db.prepare(
-      `SELECT id, ticker, sector, industry 
+      `SELECT id, ticker, sector, industry, name
        FROM stocks
        WHERE ticker = ?`
     );

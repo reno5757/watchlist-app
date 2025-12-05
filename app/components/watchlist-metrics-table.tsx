@@ -13,6 +13,7 @@ import { useState } from 'react';
 
 type MetricsRow = {
   symbol: string;
+  name?: string; 
   date: string;
   daily_return: number | null;
   return_5d: number | null;
@@ -37,127 +38,123 @@ export default function WatchlistMetricsTable({ data }: Props) {
     { id: 'symbol', desc: false },
   ]);
 
-  const columns: ColumnDef<MetricsRow>[] = [
-    {
-      accessorKey: 'symbol',
-      header: 'Ticker',
-      cell: (info) => (
-        <span className="font-semibold text-xs text-zinc-100">
-          {info.getValue<string>()}
-        </span>
-      ),
-    },
-    {
-      accessorKey: 'daily_return',
-      header: '1D',
-      cell: (info) => {
-        const v = info.getValue<number | null>();
-        return (
-          <span className={perfClass(v)}>{formatPct(v)}</span>
-        );
-      },
-    },
-    {
-      accessorKey: 'return_5d',
-      header: '5D',
-      cell: (info) => {
-        const v = info.getValue<number | null>();
-        return (
-          <span className={perfClass(v)}>{formatPct(v)}</span>
-        );
-      },
-    },
-    {
-      accessorKey: 'return_21d',
-      header: '1M',
-      cell: (info) => {
-        const v = info.getValue<number | null>();
-        return (
-          <span className={perfClass(v)}>{formatPct(v)}</span>
-        );
-      },
-    },
-    {
-      accessorKey: 'return_63d',
-      header: '3M',
-      cell: (info) => {
-        const v = info.getValue<number | null>();
-        return (
-          <span className={perfClass(v)}>{formatPct(v)}</span>
-        );
-      },
-    },
-    {
-      accessorKey: 'return_126d',
-      header: '6M',
-      cell: (info) => {
-        const v = info.getValue<number | null>();
-        return (
-          <span className={perfClass(v)}>{formatPct(v)}</span>
-        );
-      },
-    },{
-      accessorKey: 'return_252d',
-      header: '12M',
-      cell: (info) => {
-        const v = info.getValue<number | null>();
-        return (
-          <span className={perfClass(v)}>{formatPct(v)}</span>
-        );
-      },
-    },
+const columns: ColumnDef<MetricsRow>[] = [
+  {
+    accessorKey: 'symbol',
+    header: 'Ticker',
+    cell: (info) => (
+      <span className="font-semibold text-xs text-zinc-100">
+        {info.getValue<string>()}
+      </span>
+    ),
+  },
+  {
+    accessorKey: 'name',       // <-- FIXED
+    header: 'Name',
+    cell: (info) => (
+      <span className="text-xs text-zinc-300 max-w-[200px] truncate">
+        {info.getValue<string>() ?? '—'}
+      </span>
+    ),
+  },
 
-    // ---- separate MA slope columns ----
-    {
-      accessorKey: 'ma10_slope',
-      header: 'MA10',
-      cell: (info) => slopePill(info.getValue<number | null>(), '10'),
-      enableSorting: false,
-    },
-    {
-      accessorKey: 'ma20_slope',
-      header: 'MA20',
-      cell: (info) => slopePill(info.getValue<number | null>(), '20'),
-      enableSorting: false,
-    },
-    {
-      accessorKey: 'ma50_slope',
-      header: 'MA50',
-      cell: (info) => slopePill(info.getValue<number | null>(), '50'),
-      enableSorting: false,
-    },
-    {
-      accessorKey: 'ma200_slope',
-      header: 'MA200',
-      cell: (info) => slopePill(info.getValue<number | null>(), '200'),
-      enableSorting: false,
-    },
+  /* -------- performance columns -------- */
 
-    {
-      accessorKey: 'dist_52w_high',
-      header: 'To 52w High',
-      cell: (info) => {
-        const v = info.getValue<number | null>();
-        return (
-          <span className="text-zinc-200 tabular-nums">
-            {formatPct(v)}
-          </span>
-        );
-      },
+  {
+    accessorKey: 'daily_return',
+    header: '1D',
+    cell: (info) => {
+      const v = info.getValue<number | null>();
+      return <span className={perfClass(v)}>{formatPct(v)}</span>;
     },
-    {
-      accessorKey: 'dist_52w_low',
-      header: 'From 52w Low',
-      cell: (info) => {
-        const v = info.getValue<number | null>();
-        return (
-          <span className="text-zinc-200 tabular-nums">
-            {formatPct(v)}
-          </span>
-        );
-      },
+  },
+  {
+    accessorKey: 'return_5d',
+    header: '5D',
+    cell: (info) => {
+      const v = info.getValue<number | null>();
+      return <span className={perfClass(v)}>{formatPct(v)}</span>;
     },
-  ];
+  },
+  {
+    accessorKey: 'return_21d',
+    header: '1M',
+    cell: (info) => {
+      const v = info.getValue<number | null>();
+      return <span className={perfClass(v)}>{formatPct(v)}</span>;
+    },
+  },
+  {
+    accessorKey: 'return_63d',
+    header: '3M',
+    cell: (info) => {
+      const v = info.getValue<number | null>();
+      return <span className={perfClass(v)}>{formatPct(v)}</span>;
+    },
+  },
+  {
+    accessorKey: 'return_126d',
+    header: '6M',
+    cell: (info) => {
+      const v = info.getValue<number | null>();
+      return <span className={perfClass(v)}>{formatPct(v)}</span>;
+    },
+  },
+  {
+    accessorKey: 'return_252d',
+    header: '12M',
+    cell: (info) => {
+      const v = info.getValue<number | null>();
+      return <span className={perfClass(v)}>{formatPct(v)}</span>;
+    },
+  },
+
+  /* -------- slope columns -------- */
+
+  {
+    accessorKey: 'ma10_slope',
+    header: 'MA10',
+    cell: (info) => slopePill(info.getValue<number | null>(), '10'),
+    enableSorting: false,
+  },
+  {
+    accessorKey: 'ma20_slope',
+    header: 'MA20',
+    cell: (info) => slopePill(info.getValue<number | null>(), '20'),
+    enableSorting: false,
+  },
+  {
+    accessorKey: 'ma50_slope',
+    header: 'MA50',
+    cell: (info) => slopePill(info.getValue<number | null>(), '50'),
+    enableSorting: false,
+  },
+  {
+    accessorKey: 'ma200_slope',
+    header: 'MA200',
+    cell: (info) => slopePill(info.getValue<number | null>(), '200'),
+    enableSorting: false,
+  },
+
+  /* -------- 52w stats -------- */
+
+  {
+    accessorKey: 'dist_52w_high',
+    header: 'To 52w High',
+    cell: (info) => {
+      const v = info.getValue<number | null>();
+      return <span className="text-zinc-200 tabular-nums">{formatPct(v)}</span>;
+    },
+  },
+  {
+    accessorKey: 'dist_52w_low',
+    header: 'From 52w Low',
+    cell: (info) => {
+      const v = info.getValue<number | null>();
+      return <span className="text-zinc-200 tabular-nums">{formatPct(v)}</span>;
+    },
+  },
+];
 
   const table = useReactTable({
     data,
